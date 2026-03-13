@@ -1,0 +1,67 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  /* Cores Customizadas */
+  --color-brand: #00d1ff;
+  --color-bg-main: var(--bg-main);
+  --color-bg-card: var(--bg-card);
+  --color-bg-sidebar: var(--bg-sidebar);
+  --color-border-ui: var(--border-ui);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+
+  /* Configuração da Fonte Inter no Tailwind v4 */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  /* Light Mode */
+  --bg-main: #f3f6f9;
+  --bg-card: #ffffff;
+  --bg-sidebar: #ffffff;
+  --border-ui: #e5e7eb;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --accent: #00d1ff;
+}
+
+.dark {
+  /* Dark Mode */
+  --bg-main: #0b0e14;
+  --bg-card: #151921;
+  --bg-sidebar: #0f131a;
+  --border-ui: #212833;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --accent: #00d1ff;
+}
+
+/* Estilos Globais e Ajustes Minimalistas */
+@layer base {
+  body {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Números tabulares: essencial para alinhar valores financeiros na tabela */
+  .font-tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Melhoria no scrollbar para manter o minimalismo */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-ui);
+  border-radius: 10px;
+}

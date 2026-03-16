@@ -8,7 +8,8 @@ import routeUser from "./routes/RouteUser.js";
 import routeTransaction from "./routes/RouteTransaction.js";
 import routeInvestment from "./routes/RouteInvestment.js";
 import routeCategory from "./routes/RouteCategory.js"; 
-import routeGoal from "./routes/RouteGoal.js"; // Nova rota adicionada
+import routeGoal from "./routes/RouteGoal.js";
+import routeRecurrence from "./routes/RouteRecurrence.js"; // Nova rota de recorrências
 
 dotenv.config();
 
@@ -41,7 +42,8 @@ app.use('/api/users', routeUser);
 app.use('/api/transactions', routeTransaction);
 app.use('/api/investments', routeInvestment);
 app.use('/api/categories', routeCategory);
-app.use('/api/goals', routeGoal); // Endpoint para as caixinhas
+app.use('/api/goals', routeGoal);
+app.use('/api/recurrences', routeRecurrence); // Endpoint para as regras de recorrência/parcelas
 
 // Rota de teste
 app.get("/", (req, res) => {

@@ -18,29 +18,43 @@ const transactionSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['entrada', 'saida'], // Verifique se o front envia exatamente isso
+      enum: ['entrada', 'saida'],
       required: [true, 'Especifique se é entrada ou saida'],
     },
     category: {
       type: String,
       required: [true, 'A categoria é obrigatória'],
     },
-    // O CAMPO QUE FALTAVA:
-    goal: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Goal',
-      required: false, // Opcional, pois nem toda transação é de caixinha
-    },
     date: {
       type: Date,
       default: Date.now,
     },
+    goal: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Goal',
+      required: false,
+    },
+    // FLAG DE SEGURANÇA: Para validar no front/back se pode editar
+    isRecurring: {
+      type: Boolean,
+      default: false
+    },
+    recurrenceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Recurrence',
+      default: null
+    },
+    installmentNumber: {
+      type: Number,
+      default: null
+    }
   },
-  {
-    timestamps: true,
+  { 
+    timestamps: true 
   }
 );
 
-const Transaction = mongoose.model('Transaction', transactionSchema);
+transactionSchema.index({ user: 1, date: -1 });
 
+const Transaction = mongoose.model('Transaction', transactionSchema);
 export default Transaction;

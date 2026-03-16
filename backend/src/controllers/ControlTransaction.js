@@ -1,7 +1,7 @@
 import ModelTransaction from '../models/ModelTransaction.js';
-import ModelGoal from '../models/ModelGoal.js'; // Importe o model de metas
+import ModelGoal from '../models/ModelGoal.js';
 
-// @desc    Criar uma nova transação
+// @desc    Criar uma nova transação manual (Única)
 // @route   POST /api/transactions
 export const createTransaction = async (req, res) => {
   try {
@@ -13,22 +13,21 @@ export const createTransaction = async (req, res) => {
       amount: Number(amount),
       type,
       category,
-      date,
-      goal: goal || null // Aqui deve receber o ID da caixinha
+      date: date || new Date(),
+      goal: goal || null
     });
 
     const createdTransaction = await transaction.save();
 
-    // LÓGICA DE SOMA:
+    // Lógica de Metas (Caixinhas)
     if (goal) {
       const targetGoal = await ModelGoal.findById(goal);
       if (targetGoal) {
-        // Se for 'saida' (você tirou do saldo para GUARDAR), soma na caixinha
+        // Se eu tiro dinheiro para uma meta (saída do saldo), a meta aumenta
         if (type === 'saida') {
           targetGoal.currentAmount += Number(amount);
-        } 
-        // Se for 'entrada' (você RESGATOU para o saldo), subtrai da caixinha
-        else if (type === 'entrada') {
+        } else if (type === 'entrada') {
+          // Se eu retiro da meta (entrada no saldo), a meta diminui
           targetGoal.currentAmount -= Number(amount);
         }
         await targetGoal.save();
@@ -41,74 +40,60 @@ export const createTransaction = async (req, res) => {
   }
 };
 
-// @desc    Buscar todas as transações do usuário logado
+// @desc    Buscar histórico de transações do usuário
 export const getTransactions = async (req, res) => {
   try {
-    const transactions = await ModelTransaction.find({ user: req.user._id }).sort({ date: -1 });
+    // Busca transações e popula os dados da meta se houver
+    const transactions = await ModelTransaction.find({ user: req.user._id })
+      .sort({ date: -1 });
+    
     res.json(transactions);
   } catch (error) {
     res.status(500).json({ message: `Erro ao buscar transações: ${error.message}` });
   }
 };
 
-// @desc    Atualizar uma transação
+// @desc    Atualizar uma transação existente
 export const updateTransaction = async (req, res) => {
   try {
     const { id } = req.params;
     const transaction = await ModelTransaction.findById(id);
 
-    if (!transaction) {
-      return res.status(404).json({ message: 'Transação não encontrada.' });
-    }
-
+    if (!transaction) return res.status(404).json({ message: 'Transação não encontrada.' });
     if (transaction.user.toString() !== req.user._id.toString()) {
       return res.status(401).json({ message: 'Acesso negado.' });
     }
 
-    const dataToUpdate = {
-      title: req.body.title || transaction.title,
-      amount: req.body.amount ? Number(req.body.amount) : transaction.amount,
-      type: req.body.type || transaction.type,
-      category: req.body.category || transaction.category,
-      date: req.body.date || transaction.date
-    };
-
     const updated = await ModelTransaction.findByIdAndUpdate(
       id,
-      { $set: dataToUpdate },
+      { $set: req.body },
       { new: true, runValidators: true }
     );
 
     res.json(updated);
   } catch (error) {
-    console.error("ERRO NO BACKEND:", error.message);
     res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Deletar uma transação
+// @desc    Deletar uma transação (com estorno de metas)
 export const deleteTransaction = async (req, res) => {
   try {
     const transaction = await ModelTransaction.findById(req.params.id);
 
-    if (!transaction) {
-      return res.status(404).json({ message: 'Transação não encontrada.' });
-    }
-
+    if (!transaction) return res.status(404).json({ message: 'Transação não encontrada.' });
     if (transaction.user.toString() !== req.user._id.toString()) {
       return res.status(401).json({ message: 'Não autorizado.' });
     }
 
-    // Se a transação que está sendo deletada era de uma caixinha, 
-    // idealmente você deveria estornar o valor da caixinha aqui.
+    // Estorno de metas caso a transação pertença a uma
     if (transaction.goal) {
       const targetGoal = await ModelGoal.findById(transaction.goal);
       if (targetGoal) {
-        if (transaction.type === 'saida') {
-          targetGoal.currentAmount -= transaction.amount;
-        } else {
-          targetGoal.currentAmount += transaction.amount;
-        }
+        // Inverte a lógica da criação para estornar o valor
+        transaction.type === 'saida' 
+          ? targetGoal.currentAmount -= transaction.amount 
+          : targetGoal.currentAmount += transaction.amount;
         await targetGoal.save();
       }
     }
@@ -116,6 +101,6 @@ export const deleteTransaction = async (req, res) => {
     await transaction.deleteOne();
     res.json({ message: 'Transação removida com sucesso.' });
   } catch (error) {
-    res.status(500).json({ message: `Erro ao deletar transação: ${error.message}` });
+    res.status(500).json({ message: `Erro ao deletar: ${error.message}` });
   }
 };

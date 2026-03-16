@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from "react";
-import { X, Trash2, Loader2, Pencil, Plus, Calendar as CalendarIcon, CreditCard, Repeat, Target, Tag } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { X, Trash2, Loader2, Pencil, Calendar as CalendarIcon, CreditCard, Repeat, Target, Tag, Lock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "@/services/Api"; 
 import { useAlert } from "@/context/AlertContext";
 import ModalConfirm from "@/components/modals/ModalConfirm";
-
-// Importação correta do seu componente customizado
 import SelectStyle from "@/components/SelectStyle"; 
 
 const ModalRecurrence = ({ isOpen, onClose, onAdded }) => {
@@ -13,6 +11,7 @@ const ModalRecurrence = ({ isOpen, onClose, onAdded }) => {
   const [loading, setLoading] = useState(false);
   const [recurrences, setRecurrences] = useState([]);
   const [goals, setGoals] = useState([]); 
+  const [categories, setCategories] = useState([]);
   const [fetching, setFetching] = useState(false);
   
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -24,8 +23,8 @@ const ModalRecurrence = ({ isOpen, onClose, onAdded }) => {
     title: '',
     amount: '',
     type: 'saida',
-    category: 'Fixa',
-    goalId: '', 
+    category: '', 
+    goalId: 'none', 
     frequency: 'monthly',
     dayOfMonth: [new Date().getDate()],
     dayOfWeek: [1],
@@ -36,37 +35,44 @@ const ModalRecurrence = ({ isOpen, onClose, onAdded }) => {
 
   const [formData, setFormData] = useState(initialForm);
 
-  // Mapeando as categorias para o formato que seu SelectStyle espera [{ name: '...' }]
-  const categoriesOptions = [
-    { name: "Fixa" }, { name: "Assinaturas" }, { name: "Lazer" }, 
-    { name: "Saúde" }, { name: "Alimentação" }, { name: "Educação" }, 
-    { name: "Investimento" }, { name: "Outros" }
-  ];
+  const categoriesOptions = useMemo(() => 
+    categories.map(cat => ({ value: cat.name, name: cat.name })), [categories]);
 
-  // Mapeando goals para o formato do select
-  const goalsOptions = goals.map(g => ({ value: g._id, name: g.title }));
+  const goalsOptions = useMemo(() => [
+    { value: 'none', name: 'Sem Caixinha' },
+    ...goals.map(g => ({ value: g._id, name: g.name }))
+  ], [goals]);
 
-  const toggleSelection = (field, value) => {
-    setFormData(prev => {
-      const currentValues = Array.isArray(prev[field]) ? prev[field] : [];
-      const newValues = currentValues.includes(value)
-        ? currentValues.filter(v => v !== value)
-        : [...currentValues, value];
-      return { ...prev, [field]: newValues };
-    });
-  };
+  // LOG 1: Monitora a seleção da caixinha e aplica as travas
+  useEffect(() => {
+    if (formData.goalId !== 'none') {
+      const selectedGoal = goals.find(g => g._id === formData.goalId);
+      console.log("🔍 Caixinha Detectada no Form:", selectedGoal);
+      
+      if (selectedGoal) {
+        setFormData(prev => ({
+          ...prev,
+          type: 'saida',
+          title: `Depósito: ${selectedGoal.name}`,
+          category: selectedGoal.category || 'outros'
+        }));
+      }
+    }
+  }, [formData.goalId, goals]);
 
   const fetchData = async () => {
     setFetching(true);
     try {
-      const [resRec, resGoals] = await Promise.all([
+      const [resRec, resGoals, resCats] = await Promise.all([
         api.get('/recurrences'),
-        api.get('/goals') 
+        api.get('/goals'),
+        api.get('/categories') 
       ]);
       setRecurrences(Array.isArray(resRec.data) ? resRec.data : []);
       setGoals(Array.isArray(resGoals.data) ? resGoals.data : []);
+      setCategories(Array.isArray(resCats.data) ? resCats.data : []);
     } catch (err) {
-      console.error("Erro ao buscar dados:", err);
+      console.error("❌ Erro ao buscar dados:", err);
     } finally {
       setFetching(false);
     }
@@ -90,8 +96,8 @@ const ModalRecurrence = ({ isOpen, onClose, onAdded }) => {
       title: rec.title,
       amount: rec.amount.toString(),
       type: rec.type,
-      category: rec.category || 'Fixa',
-      goalId: rec.goalId || '',
+      category: rec.category,
+      goalId: rec.goalId || 'none',
       frequency: rec.frequency || 'monthly',
       dayOfMonth: Array.isArray(rec.dayOfMonth) ? rec.dayOfMonth : [rec.dayOfMonth || 1],
       dayOfWeek: Array.isArray(rec.dayOfWeek) ? rec.dayOfWeek : [rec.dayOfWeek || 1],
@@ -103,35 +109,51 @@ const ModalRecurrence = ({ isOpen, onClose, onAdded }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.title || !formData.amount) return showAlert("Preencha título e valor.", "error");
+    if (!formData.title || !formData.amount || !formData.category) {
+      return showAlert("Preencha os campos obrigatórios.", "error");
+    }
 
     setLoading(true);
-    try {
-      const payload = {
-        ...formData,
-        amount: parseFloat(formData.amount),
-        totalInstallments: formData.isInstallment ? parseInt(formData.totalInstallments) : 1,
-        dayOfMonth: typeof formData.dayOfMonth === 'string' 
-          ? formData.dayOfMonth.split(',').map(d => parseInt(d.trim())).filter(d => !isNaN(d))
-          : formData.dayOfMonth
-      };
 
+    const payload = {
+      ...formData,
+      amount: parseFloat(formData.amount),
+      goalId: formData.goalId === 'none' ? null : formData.goalId,
+      totalInstallments: formData.isInstallment ? parseInt(formData.totalInstallments) : 1
+    };
+
+    // LOG 2: Verificação do que sai do Front-end
+    console.log("🚀 Payload sendo enviado:", payload);
+
+    try {
       if (editingId) {
         await api.put(`/recurrences/${editingId}`, payload);
         showAlert("Atualizado!", "success");
       } else {
-        await api.post('/recurrences', payload);
+        const res = await api.post('/recurrences', payload);
+        console.log("✅ Resposta do Servidor:", res.data);
         showAlert("Plano ativado!", "success");
       }
-
       resetForm();
       fetchData();
       onAdded();
     } catch (err) {
-      showAlert(`Erro ao salvar.`, "error");
+      // LOG 3: Verificação de erro do Back-end
+      console.error("❌ Erro no Submit:", err.response?.data || err.message);
+      showAlert(`Erro ao salvar. Verifique o console.`, "error");
     } finally {
       setLoading(false);
     }
+  };
+
+  const toggleSelection = (field, value) => {
+    setFormData(prev => {
+      const currentValues = Array.isArray(prev[field]) ? prev[field] : [];
+      const newValues = currentValues.includes(value)
+        ? currentValues.filter(v => v !== value)
+        : [...currentValues, value];
+      return { ...prev, [field]: newValues };
+    });
   };
 
   const handleDelete = async () => {
@@ -165,7 +187,7 @@ const ModalRecurrence = ({ isOpen, onClose, onAdded }) => {
           <motion.div initial={{ opacity: 0, scale: 0.9, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 30 }}
             className="bg-bg-card w-full max-w-4xl max-h-[90vh] rounded-[2.5rem] border border-border-ui shadow-2xl relative z-10 flex flex-col md:flex-row overflow-hidden"
           >
-            {/* FORMULÁRIO */}
+            {/* COLUNA ESQUERDA: FORMULÁRIO */}
             <div className="flex-1 border-r border-border-ui/50 overflow-y-auto custom-scrollbar">
               <div className={`p-6 text-white transition-colors sticky top-0 z-20 ${editingId ? 'bg-orange-500' : 'bg-brand'}`}>
                 <h2 className="text-xl font-black uppercase italic tracking-tighter">
@@ -174,13 +196,30 @@ const ModalRecurrence = ({ isOpen, onClose, onAdded }) => {
               </div>
 
               <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-2">
+                {/* TIPO (SAÍDA OBRIGATÓRIA SE GOAL) */}
+                <div className="grid grid-cols-2 gap-2 relative">
+                  {formData.goalId !== 'none' && (
+                    <div className="absolute inset-0 z-10 cursor-not-allowed flex items-center justify-center bg-bg-card/40 backdrop-blur-[1px] rounded-xl">
+                      <Lock size={12} className="text-white/50" />
+                    </div>
+                  )}
                   <button type="button" onClick={() => setFormData({...formData, type: 'entrada'})} className={`py-2.5 rounded-xl font-black uppercase text-[9px] border-2 transition-all ${formData.type === 'entrada' ? 'bg-green-500 border-green-500 text-white' : 'bg-bg-main/50 border-border-ui/50 text-text-secondary'}`}>Entrada</button>
                   <button type="button" onClick={() => setFormData({...formData, type: 'saida'})} className={`py-2.5 rounded-xl font-black uppercase text-[9px] border-2 transition-all ${formData.type === 'saida' ? 'bg-red-500 border-red-500 text-white' : 'bg-bg-main/50 border-border-ui/50 text-text-secondary'}`}>Saída</button>
                 </div>
                 
-                <input placeholder="Título" className="w-full bg-bg-main/50 border border-border-ui/50 p-4 rounded-xl focus:border-brand outline-none font-bold text-sm text-text-primary" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} />
+                {/* TÍTULO (BLOQUEADO SE GOAL) */}
+                <div className="relative">
+                  <input 
+                    placeholder="Título" 
+                    readOnly={formData.goalId !== 'none'}
+                    className={`w-full bg-bg-main/50 border border-border-ui/50 p-4 rounded-xl outline-none font-bold text-sm text-text-primary ${formData.goalId !== 'none' ? 'opacity-50 cursor-not-allowed' : 'focus:border-brand'}`} 
+                    value={formData.title} 
+                    onChange={(e) => setFormData({...formData, title: e.target.value})} 
+                  />
+                  {formData.goalId !== 'none' && <Target size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-brand" />}
+                </div>
                 
+                {/* VALOR E PARCELAMENTO */}
                 <div className="grid grid-cols-2 gap-3">
                   <input type="number" placeholder="Valor" className="bg-bg-main/50 border border-border-ui/50 p-4 rounded-xl focus:border-brand outline-none font-bold text-sm text-text-primary" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} />
                   <button type="button" onClick={() => setFormData({...formData, isInstallment: !formData.isInstallment})} 
@@ -190,17 +229,24 @@ const ModalRecurrence = ({ isOpen, onClose, onAdded }) => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                   {/* SELEÇÃO DE CATEGORIA USANDO SEU COMPONENTE */}
-                  <SelectStyle 
-                    icon={Tag}
-                    options={categoriesOptions}
-                    value={formData.category}
-                    name="category"
-                    onChange={(e) => setFormData({...formData, category: e.target.value})}
-                    placeholder="Categoria"
-                  />
+                  {/* CATEGORIA (BLOQUEADA SE GOAL) */}
+                  <div className="relative">
+                    {formData.goalId !== 'none' && (
+                       <div className="absolute inset-0 z-10 cursor-not-allowed flex items-center justify-center bg-bg-card/40 backdrop-blur-[1px] rounded-xl">
+                        <Lock size={12} className="text-white/50" />
+                      </div>
+                    )}
+                    <SelectStyle 
+                      icon={Tag}
+                      options={categoriesOptions}
+                      value={formData.category}
+                      name="category"
+                      onChange={(e) => setFormData({...formData, category: e.target.value})}
+                      placeholder="Categoria"
+                    />
+                  </div>
 
-                  {/* VINCULAR CAIXINHA USANDO SEU COMPONENTE */}
+                  {/* SELEÇÃO DA CAIXINHA */}
                   <SelectStyle 
                     icon={Target}
                     options={goalsOptions}
@@ -211,6 +257,7 @@ const ModalRecurrence = ({ isOpen, onClose, onAdded }) => {
                   />
                 </div>
 
+                {/* CAMPO DE TOTAL DE PARCELAS */}
                 {formData.isInstallment && (
                   <div className="animate-in zoom-in-95 duration-200">
                     <label className="text-[9px] font-black uppercase opacity-40 ml-1">Total de Parcelas</label>
@@ -218,6 +265,7 @@ const ModalRecurrence = ({ isOpen, onClose, onAdded }) => {
                   </div>
                 )}
 
+                {/* FREQUÊNCIA */}
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-black uppercase opacity-40 ml-1">Frequência</label>
                   <div className="grid grid-cols-3 gap-2">
@@ -259,7 +307,7 @@ const ModalRecurrence = ({ isOpen, onClose, onAdded }) => {
               </form>
             </div>
 
-            {/* LISTAGEM */}
+            {/* COLUNA DIREITA: LISTAGEM */}
             <div className="flex-1 bg-bg-main/30 flex flex-col min-h-0">
               <div className="p-6 flex justify-between items-center border-b border-border-ui/50">
                 <h3 className="font-black uppercase italic text-base tracking-tighter text-text-primary">Recorrências</h3>
@@ -268,6 +316,7 @@ const ModalRecurrence = ({ isOpen, onClose, onAdded }) => {
 
               <div className="flex-1 overflow-y-auto p-4 space-y-2.5 custom-scrollbar">
                 {fetching ? <div className="flex justify-center py-10"><Loader2 className="animate-spin opacity-20" /></div> : 
+                  recurrences.length === 0 ? <p className="text-center text-[10px] uppercase font-bold opacity-20 py-10">Nenhum plano ativo</p> :
                   recurrences.map((rec) => (
                     <div key={rec._id} className="bg-bg-card border border-border-ui/50 p-3 rounded-2xl flex items-center justify-between group">
                       <div className="flex items-center gap-2.5">

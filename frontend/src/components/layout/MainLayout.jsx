@@ -4,23 +4,29 @@ import Topbar from './bars/Topbar';
 
 const MainLayout = ({ children }) => {
   return (
-    <div className="flex min-h-screen bg-bg-main transition-colors duration-300 font-sans">
-      {/* Menu Lateral Fixo (Compacto) 
-         O Sidebar agora ocupa 80px (w-20), o que deixa mais espaço para os dados.
-      */}
+    /* h-screen + overflow-hidden: Trava a janela do navegador. 
+       Isso impede que a Topbar "suba" ou suma da tela.
+    */
+    <div className="flex h-screen w-full bg-bg-main transition-colors duration-300 font-sans overflow-hidden">
+      
+      {/* Sidebar Fixo */}
       <Sidebar />
 
-      {/* Área de Conteúdo */}
-      <div className="flex-1 flex flex-col min-w-0"> 
-        {/* min-w-0 evita que o conteúdo quebre o flexbox em telas menores */}
+      {/* Container da Direita */}
+      <div className="flex-1 flex flex-col min-w-0 h-full relative"> 
         
+        {/* Topbar: Fora do fluxo de scroll, ela nunca se move */}
         <Topbar />
 
-        {/* Reduzi o pt-2 para manter a harmonia com a Topbar.
-           O overflow-x-hidden garante que tabelas grandes não quebrem o layout lateral.
+        {/* Área de Conteúdo com scroll independente:
+           - overflow-y-auto: Permite scroll vertical apenas aqui.
+           - flex-1: Ocupa todo o espaço restante abaixo da Topbar.
         */}
-        <main className="p-8 pt-4 flex-1 overflow-x-hidden animate-in fade-in duration-500">
-          {children}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-8 pt-4 animate-in fade-in duration-500">
+          {/* Centralizador de conteúdo para telas ultra-wide */}
+          <div className="max-w-[1600px] mx-auto w-full">
+            {children}
+          </div>
         </main>
       </div>
     </div>

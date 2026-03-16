@@ -11,12 +11,12 @@
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
 
-  /* Configuração da Fonte Inter no Tailwind v4 */
+  /* Configuração da Fonte Inter */
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
-  /* Light Mode */
+  /* Light Mode - Mantido Clean */
   --bg-main: #f3f6f9;
   --bg-card: #ffffff;
   --bg-sidebar: #ffffff;
@@ -27,13 +27,13 @@
 }
 
 .dark {
-  /* Dark Mode */
-  --bg-main: #0b0e14;
-  --bg-card: #151921;
-  --bg-sidebar: #0f131a;
-  --border-ui: #212833;
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
+  /* Dark Mode - Deep Blue & Slate */
+  --bg-main: #06090f;        /* Azul marinho quase preto */
+  --bg-card: #0d121d;        /* Azul petróleo profundo */
+  --bg-sidebar: #090d16;     /* Tom intermediário para contraste */
+  --border-ui: #1e293b;      /* Borda azulada (Slate 800) */
+  --text-primary: #f1f5f9;   /* Branco azulado */
+  --text-secondary: #94a3b8; /* Cinza azulado suave */
   --accent: #00d1ff;
 }
 
@@ -42,19 +42,19 @@
   body {
     background-color: var(--bg-main);
     color: var(--text-primary);
-    transition: background-color 0.3s ease, color 0.3s ease;
+    transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.4s ease;
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Números tabulares: essencial para alinhar valores financeiros na tabela */
+  /* Números tabulares: essencial para alinhar valores financeiros */
   .font-tabular {
     font-variant-numeric: tabular-nums;
   }
 }
 
-/* Melhoria no scrollbar para manter o minimalismo */
+/* Scrollbar Estilizada para o modo Deep Blue */
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -64,4 +64,7 @@
 ::-webkit-scrollbar-thumb {
   background: var(--border-ui);
   border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-brand);
 }

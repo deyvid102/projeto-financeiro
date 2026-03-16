@@ -1,6 +1,11 @@
 import express from 'express';
-import { getCategories, createCategory, deleteCategory } from '../controllers/ControlCategory.js';
-import { protect } from '../middleware/authMiddleware.js'; // Ajuste o caminho para o seu middleware de auth
+import { 
+  getCategories, 
+  createCategory, 
+  updateCategory, // Importe a nova função que criamos no controller
+  deleteCategory 
+} from '../controllers/ControlCategory.js';
+import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -10,6 +15,7 @@ router.route('/')
   .post(protect, createCategory);
 
 router.route('/:id')
+  .put(protect, updateCategory)    // Adicionado o método PUT para edição
   .delete(protect, deleteCategory);
 
 export default router;

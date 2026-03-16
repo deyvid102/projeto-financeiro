@@ -1,21 +1,21 @@
 import express from 'express';
+const router = express.Router();
 import { 
   createTransaction, 
   getTransactions, 
-  updateTransaction, // 1. Importe a nova função aqui
+  updateTransaction, 
   deleteTransaction 
 } from '../controllers/ControlTransaction.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { protect } from '../middleware/authMiddleware.js'; // Seu middleware de autenticação
 
-const router = express.Router();
-
-// Todas as rotas abaixo exigem autenticação
+// Rota principal: "/" mapeia para GET (buscar todas) e POST (criar uma)
 router.route('/')
-  .post(protect, createTransaction)
-  .get(protect, getTransactions);
+  .get(protect, getTransactions)
+  .post(protect, createTransaction);
 
+// Rota com ID: "/:id" mapeia para PUT (atualizar) e DELETE (remover)
 router.route('/:id')
-  .put(protect, updateTransaction) // 2. Adicione o método PUT aqui
+  .put(protect, updateTransaction)
   .delete(protect, deleteTransaction);
 
 export default router;

@@ -8,6 +8,7 @@ import routeUser from "./routes/RouteUser.js";
 import routeTransaction from "./routes/RouteTransaction.js";
 import routeInvestment from "./routes/RouteInvestment.js";
 import routeCategory from "./routes/RouteCategory.js"; 
+import routeGoal from "./routes/RouteGoal.js"; // Nova rota adicionada
 
 dotenv.config();
 
@@ -39,11 +40,12 @@ connectDB();
 app.use('/api/users', routeUser);
 app.use('/api/transactions', routeTransaction);
 app.use('/api/investments', routeInvestment);
-app.use('/api/categories', routeCategory); // <-- Novo Endpoint registrado
+app.use('/api/categories', routeCategory);
+app.use('/api/goals', routeGoal); // Endpoint para as caixinhas
 
 // Rota de teste
 app.get("/", (req, res) => {
-  res.send("Servidor do Sistema Financeiro Pessoal rodando corretamente!");
+  res.send("Servidor do BarberMAX (Sistema Financeiro) rodando corretamente!");
 });
 
 app.listen(PORT, () => {

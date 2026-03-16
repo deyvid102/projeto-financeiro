@@ -11,7 +11,6 @@ const investmentSchema = new mongoose.Schema(
       type: String,
       required: [true, 'O nome do investimento é obrigatório'],
       trim: true,
-      // Exemplos: 'Tesouro Selic', 'Ações PETR4', 'CDB Banco Inter'
     },
     type: {
       type: String,
@@ -22,24 +21,60 @@ const investmentSchema = new mongoose.Schema(
       type: Number,
       required: [true, 'O valor investido inicial é obrigatório'],
     },
-    currentValue: {
+    expectedProfitability: {
       type: Number,
-      required: [true, 'O valor atual é obrigatório'],
-      // Esse campo pode ser atualizado pelo usuário mensalmente para ver o rendimento
+      required: [true, 'A rentabilidade esperada é necessária para o cálculo médio'],
     },
-    purchaseDate: {
+    startDate: {
       type: Date,
       default: Date.now,
     },
-    maturityDate: {
-      type: Date, // Data de vencimento (opcional, útil para Renda Fixa)
+    endDate: {
+      type: Date,
     },
+    status: {
+      type: String,
+      enum: ['pendente', 'em andamento', 'finalizado'],
+      default: 'em andamento' 
+    },
+    isLiquidated: {
+      type: Boolean,
+      default: false
+    }
   },
   {
     timestamps: true,
+    // Isso garante que o virtual apareça quando você der um console.log ou enviar via API
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
   }
 );
 
-const Investment = mongoose.model('Investment', investmentSchema);
+/**
+ * Campo Virtual: currentValue
+ * Calcula o lucro proporcional ao tempo decorrido automaticamente.
+ */
+investmentSchema.virtual('currentValue').get(function() {
+  const now = new Date();
+  const start = new Date(this.startDate);
+  const end = new Date(this.endDate);
 
+  if (now < start) return this.amountInvested;
+  
+  if (now >= end) {
+    return parseFloat((this.amountInvested * (1 + (this.expectedProfitability / 100))).toFixed(2));
+  }
+
+  const totalDuration = end - start;
+  const elapsed = now - start;
+  const progressFactor = elapsed / totalDuration;
+
+  const finalValue = this.amountInvested * (1 + (this.expectedProfitability / 100));
+  const totalGain = finalValue - this.amountInvested;
+  const currentGain = totalGain * progressFactor;
+  
+  return parseFloat((this.amountInvested + currentGain).toFixed(2));
+});
+
+const Investment = mongoose.model('Investment', investmentSchema);
 export default Investment;

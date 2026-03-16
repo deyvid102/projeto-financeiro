@@ -13,6 +13,7 @@ export const protect = async (req, res, next) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
       // Busca o usuário no banco (sem a senha) e anexa à requisição
+      // Importante: no seu ModelGoal e ControlGoal usamos req.user.id
       req.user = await ModelUser.findById(decoded.id).select('-password');
 
       next();
@@ -26,3 +27,6 @@ export const protect = async (req, res, next) => {
     res.status(401).json({ message: 'Não autorizado, sem token.' });
   }
 };
+
+// ADICIONE ESTA LINHA PARA RESOLVER O ERRO DE IMPORTAÇÃO
+export default protect;

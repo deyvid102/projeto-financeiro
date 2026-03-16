@@ -5,12 +5,12 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // Quando o front chamar /api, o Vite redireciona
+      // Proxy para o seu Backend Node.js
       '/api': {
-        target: 'http://localhost:5000', // Verifique se seu Node está na 5000
+        target: 'http://localhost:5000', 
         changeOrigin: true,
-        // rewrite: (path) => path.replace(/^\/api/, '') // COMENTE esta linha se o seu backend já usa /api nas rotas
-      }
+        // rewrite: (path) => path.replace(/^\/api/, '') 
+      },
     }
   }
 })

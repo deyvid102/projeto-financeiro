@@ -3,7 +3,8 @@ import {
   createInvestment, 
   getInvestments, 
   updateInvestmentValue, 
-  deleteInvestment 
+  deleteInvestment,
+  liquidateInvestment // <-- Nova função que vamos garantir no Controller
 } from '../controllers/ControlInvestment.js';
 import { protect } from '../middleware/authMiddleware.js';
 
@@ -16,5 +17,8 @@ router.route('/')
 router.route('/:id')
   .put(protect, updateInvestmentValue)
   .delete(protect, deleteInvestment);
+
+// Rota específica para finalizar o investimento e gerar a entrada opcional
+router.put('/:id/liquidate', protect, liquidateInvestment);
 
 export default router;

@@ -18,16 +18,22 @@ const transactionSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['entrada', 'saida'], // Limita os valores possíveis
+      enum: ['entrada', 'saida'], // Verifique se o front envia exatamente isso
       required: [true, 'Especifique se é entrada ou saida'],
     },
     category: {
-  type: String, // Mude de ObjectId para String
-  required: [true, 'A categoria é obrigatória'],
-},
+      type: String,
+      required: [true, 'A categoria é obrigatória'],
+    },
+    // O CAMPO QUE FALTAVA:
+    goal: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Goal',
+      required: false, // Opcional, pois nem toda transação é de caixinha
+    },
     date: {
       type: Date,
-      default: Date.now, // Se não passar data, assume a de hoje
+      default: Date.now,
     },
   },
   {

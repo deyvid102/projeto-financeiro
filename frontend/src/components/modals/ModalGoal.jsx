@@ -33,7 +33,7 @@ const ModalGoal = ({ isOpen, onClose, onRefresh }) => {
 
   const initialState = {
     name: '',
-    category: 'outros',
+    categoryGoal: 'outros',
     targetAmount: '',
     color: '#06b6d4',
     icon: 'PiggyBank'
@@ -123,9 +123,9 @@ const ModalGoal = ({ isOpen, onClose, onRefresh }) => {
             <div className="relative z-50">
               <SelectStyle 
                 label="Categoria"
-                value={formData.category}
+                value={formData.categoryGoal}
                 options={categories}
-                onChange={(e) => setFormData({...formData, category: e.target.value})}
+                onChange={(e) => setFormData({...formData, categoryGoal: e.target.value})}
               />
             </div>
 

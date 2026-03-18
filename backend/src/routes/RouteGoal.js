@@ -1,12 +1,17 @@
 import express from 'express';
-import { getGoals, createGoal, updateBalance, deleteGoal } from '../controllers/ControlGoal.js';
-import auth from '../middleware/AuthMiddleware.js'; // 'auth' aqui receberá a função 'protect'
+import { 
+  getGoals, 
+  createGoal, 
+  updateBalance, 
+  deleteGoal 
+} from '../controllers/ControlGoal.js';
+import { protect } from '../middleware/authMiddleware.js'; // Padronize o Case do arquivo
 
 const router = express.Router();
 
-router.get('/', auth, getGoals);
-router.post('/', auth, createGoal);
-router.patch('/:id/balance', auth, updateBalance);
-router.delete('/:id', auth, deleteGoal);
+router.get('/', protect, getGoals);
+router.post('/', protect, createGoal);
+router.patch('/:id/balance', protect, updateBalance);
+router.delete('/:id', protect, deleteGoal);
 
 export default router;

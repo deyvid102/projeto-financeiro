@@ -2,7 +2,7 @@
 @import "tailwindcss";
 
 @theme {
-  /* Cores Customizadas */
+  /* Cores Customizadas - Agora usando as variáveis que você definiu */
   --color-brand: #00d1ff;
   --color-bg-main: var(--bg-main);
   --color-bg-card: var(--bg-card);
@@ -10,13 +10,16 @@
   --color-border-ui: var(--border-ui);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
+  --color-accent: var(--accent);
 
-  /* Configuração da Fonte Inter */
+  /* Configuração da Fonte */
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Configuração para o Tailwind v4 entender o modo escuro por classe */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  /* Light Mode - Mantido Clean */
   --bg-main: #f3f6f9;
   --bg-card: #ffffff;
   --bg-sidebar: #ffffff;
@@ -27,44 +30,30 @@
 }
 
 .dark {
-  /* Dark Mode - Deep Blue & Slate */
-  --bg-main: #06090f;        /* Azul marinho quase preto */
-  --bg-card: #0d121d;        /* Azul petróleo profundo */
-  --bg-sidebar: #090d16;     /* Tom intermediário para contraste */
-  --border-ui: #1e293b;      /* Borda azulada (Slate 800) */
-  --text-primary: #f1f5f9;   /* Branco azulado */
-  --text-secondary: #94a3b8; /* Cinza azulado suave */
+  --bg-main: #06090f;
+  --bg-card: #0d121d;
+  --bg-sidebar: #090d16;
+  --border-ui: #1e293b;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
   --accent: #00d1ff;
 }
 
-/* Estilos Globais e Ajustes Minimalistas */
 @layer base {
   body {
-    background-color: var(--bg-main);
-    color: var(--text-primary);
-    transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.4s ease;
-    font-family: var(--font-sans);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    @apply bg-bg-main text-text-primary transition-colors duration-500 font-sans antialiased;
   }
 
-  /* Números tabulares: essencial para alinhar valores financeiros */
   .font-tabular {
     font-variant-numeric: tabular-nums;
   }
 }
 
-/* Scrollbar Estilizada para o modo Deep Blue */
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
   background: var(--border-ui);
   border-radius: 10px;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-brand);
-}
+::-webkit-scrollbar-thumb:hover { background: #00d1ff; }

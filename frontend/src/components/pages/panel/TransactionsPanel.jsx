@@ -2,11 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Tag, Plus, ArrowUpCircle, ArrowDownCircle, 
   Loader2, SlidersHorizontal, ChevronLeft, ChevronRight, 
-  X, RotateCcw, Calendar, Repeat
+  X, RotateCcw, Calendar, Repeat, Hash
 } from 'lucide-react';
 import { FiEdit2, FiTrash2 } from 'react-icons/fi';
 
-import api from "@/services/Api";
+import api from "@/services/api";
 import { useAlert } from "@/context/AlertContext";
 
 import ModalConfirm from "@/components/modals/ModalConfirm";
@@ -45,10 +45,12 @@ const TransactionsPanel = () => {
 
   const fetchTransactions = async () => {
     try {
+      setLoading(true);
       const response = await api.get('transactions');
       setTransactions(response.data);
     } catch (err) {
       console.error("Erro ao carregar transações:", err);
+      showAlert("Não foi possível carregar os dados.", "error");
     } finally {
       setLoading(false);
     }
@@ -78,13 +80,11 @@ const TransactionsPanel = () => {
   };
 
   const handleEditClick = (transaction) => {
-    // Travas removidas para permitir edição de recorrentes
     setTransactionToEdit(transaction);
     setIsModalOpen(true);
   };
 
   const handleDeleteClick = (transaction) => {
-    // Travas removidas para permitir exclusão de recorrentes
     setTransactionToDelete(transaction._id);
     setIsConfirmOpen(true);
   };
@@ -128,11 +128,15 @@ const TransactionsPanel = () => {
     });
 
     return result.sort((a, b) => {
-      if (filters.order === 'date-desc') return new Date(b.date) - new Date(a.date);
-      if (filters.order === 'date-asc') return new Date(a.date) - new Date(b.date);
+      // Ordenação: Criados por último no banco (ID ou createdAt)
+      const dateA = new Date(a.createdAt || a.date);
+      const dateB = new Date(b.createdAt || b.date);
+      
+      if (filters.order === 'date-desc') return dateB - dateA;
+      if (filters.order === 'date-asc') return dateA - dateB;
       if (filters.order === 'amount-desc') return b.amount - a.amount;
       if (filters.order === 'amount-asc') return a.amount - b.amount;
-      return 0;
+      return dateB - dateA; 
     });
   }, [transactions, filter, searchTerm, filters]);
 
@@ -147,7 +151,7 @@ const TransactionsPanel = () => {
     return cats.map(c => ({ label: c, value: c }));
   }, [transactions]);
 
-  if (loading) {
+  if (loading && transactions.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-brand">
         <Loader2 className="animate-spin mb-2" size={40} />
@@ -180,6 +184,7 @@ const TransactionsPanel = () => {
         <button onClick={() => setIsFilterSidebarOpen(true)} className={`flex items-center justify-center gap-3 px-4 py-4 rounded-2xl text-[10px] font-black uppercase transition-all shadow-sm border ${isFilterSidebarOpen ? 'bg-text-primary text-white border-text-primary' : 'bg-bg-card text-text-secondary border-border-ui hover:border-brand'}`}><SlidersHorizontal size={18} /> Filtros</button>
       </div>
 
+      {/* Etiquetas de Filtro Ativo */}
       <div className="flex flex-wrap items-center gap-3 mb-8 min-h-[45px]">
         {filters.period !== 'all' && (
           <div className="flex items-center gap-3 px-4 py-2 bg-brand/10 border border-brand/20 rounded-xl animate-in zoom-in duration-300">
@@ -220,44 +225,66 @@ const TransactionsPanel = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-border-ui/30">
-              {paginatedTransactions.map((t) => (
-                <tr key={t._id} className="text-sm text-text-primary hover:bg-bg-main/20 transition-all group animate-in slide-in-from-right duration-500">
-                  <td className="px-8 py-6 text-center">
-                    <div className={`flex items-center justify-center w-9 h-9 mx-auto rounded-full ${t.type === 'entrada' ? 'text-green-500 bg-green-500/10' : 'text-red-500 bg-red-500/10'}`}>
-                      {t.type === 'entrada' ? <ArrowUpCircle size={22} strokeWidth={3} /> : <ArrowDownCircle size={22} strokeWidth={3} />}
-                    </div>
-                  </td>
-                  <td className="px-4 py-6">
-                    <div className="flex flex-col">
-                      <span className="font-black italic tracking-tight uppercase group-hover:text-brand transition-colors">{t.title}</span>
-                      {t.isRecurring && (
-                        <span className="flex items-center gap-1 text-[8px] font-black text-brand uppercase tracking-tighter mt-1">
-                          <Repeat size={10} /> automático
+              {paginatedTransactions.map((t) => {
+                // Lógica para pegar os dados da recorrência/parcelamento
+                const hasInstallments = t.recurrence?.totalInstallments > 1 || t.totalInstallments > 1;
+                const current = t.currentInstallment || t.recurrence?.currentInstallment;
+                const total = t.totalInstallments || t.recurrence?.totalInstallments;
+
+                return (
+                  <tr key={t._id} className="text-sm text-text-primary hover:bg-bg-main/20 transition-all group animate-in slide-in-from-right duration-500">
+                    <td className="px-8 py-6 text-center">
+                      <div className={`flex items-center justify-center w-9 h-9 mx-auto rounded-full ${t.type === 'entrada' ? 'text-green-500 bg-green-500/10' : 'text-red-500 bg-red-500/10'}`}>
+                        {t.type === 'entrada' ? <ArrowUpCircle size={22} strokeWidth={3} /> : <ArrowDownCircle size={22} strokeWidth={3} />}
+                      </div>
+                    </td>
+                    <td className="px-4 py-6">
+                      <div className="flex flex-col">
+                        <span className="font-black italic tracking-tight uppercase group-hover:text-brand transition-colors">
+                          {t.title} 
+                          {hasInstallments && (
+                            <span className="ml-1.5 text-blue-500 font-black not-italic lowercase">
+                              ({current}/{total})
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-6 text-center">
-                    <span className="px-4 py-1.5 bg-bg-main border border-border-ui/50 rounded-lg text-[9px] font-black text-text-secondary uppercase tracking-widest">{t.category}</span>
-                  </td>
-                  <td className="px-4 py-6 text-center text-text-secondary font-bold text-xs">
-                    {new Date(t.date).toLocaleDateString('pt-br', { timeZone: 'UTC' })}
-                  </td>
-                  <td className={`px-4 py-6 text-right font-black text-sm italic ${t.type === 'entrada' ? 'text-green-500' : 'text-red-500'}`}>
-                    {t.type === 'entrada' ? '+ ' : '- '}{t.amount.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
-                  </td>
-                  <td className="px-8 py-6 text-center">
-                    <div className="flex justify-center gap-2">
-                      <button onClick={() => handleEditClick(t)} className="p-3 bg-bg-main rounded-xl transition-all active:scale-90 hover:bg-brand hover:text-white text-text-secondary">
-                        <FiEdit2 size={14} />
-                      </button>
-                      <button onClick={() => handleDeleteClick(t)} className="p-3 bg-bg-main rounded-xl transition-all active:scale-90 hover:bg-red-500 hover:text-white text-text-secondary">
-                        <FiTrash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        <div className="flex gap-2 items-center mt-1">
+                          {t.isRecurring && (
+                            <span className="flex items-center gap-1 text-[8px] font-black text-brand uppercase tracking-tighter">
+                              <Repeat size={10} /> Recorrente
+                            </span>
+                          )}
+                          {/* Contador de faltantes discreto abaixo, se houver parcelas */}
+                          {hasInstallments && total - current > 0 && (
+                            <span className="text-[7px] font-black text-text-secondary/40 uppercase tracking-widest italic">
+                              Faltam {total - current}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-6 text-center">
+                      <span className="px-4 py-1.5 bg-bg-main border border-border-ui/50 rounded-lg text-[9px] font-black text-text-secondary uppercase tracking-widest">{t.category}</span>
+                    </td>
+                    <td className="px-4 py-6 text-center text-text-secondary font-bold text-xs">
+                      {new Date(t.date).toLocaleDateString('pt-br', { timeZone: 'UTC' })}
+                    </td>
+                    <td className={`px-4 py-6 text-right font-black text-sm italic ${t.type === 'entrada' ? 'text-green-500' : 'text-red-500'}`}>
+                      {t.type === 'entrada' ? '+ ' : '- '}{t.amount.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
+                    </td>
+                    <td className="px-8 py-6 text-center">
+                      <div className="flex justify-center gap-2">
+                        <button onClick={() => handleEditClick(t)} className="p-3 bg-bg-main rounded-xl transition-all active:scale-90 hover:bg-brand hover:text-white text-text-secondary">
+                          <FiEdit2 size={14} />
+                        </button>
+                        <button onClick={() => handleDeleteClick(t)} className="p-3 bg-bg-main rounded-xl transition-all active:scale-90 hover:bg-red-500 hover:text-white text-text-secondary">
+                          <FiTrash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

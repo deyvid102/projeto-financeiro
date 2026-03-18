@@ -29,12 +29,12 @@ const transactionSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    // Vínculo com a Meta
     goal: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Goal',
       required: false,
     },
-    // FLAG DE SEGURANÇA: Para validar no front/back se pode editar
     isRecurring: {
       type: Boolean,
       default: false

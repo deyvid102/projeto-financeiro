@@ -16,11 +16,6 @@ const categorySchema = new mongoose.Schema(
       type: String, 
       default: '#3b82f6' // Cor padrão (azul) para exibir no front
     },
-    type: {
-      type: String,
-      enum: ['transacao', 'investimento', 'ambos'],
-      default: 'transacao'
-    }
   },
   { timestamps: true }
 );

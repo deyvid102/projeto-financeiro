@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Loader2, Plus, Target, PiggyBank, Trash2, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
-import api from '../../../services/api';
+import api from '../../../services/Api';
 import { useAlert } from '../../../context/AlertContext';
 import ModalConfirm from '../../modals/ModalConfirm';
 import ModalGoal from '../../modals/ModalGoal';
@@ -44,7 +44,7 @@ const DashGoal = () => {
   const handleDepositClick = (goal) => {
     setTransactionPreset({
       title: `Depósito: ${goal.name}`,
-      category: 'Caixinha',
+      categoryGoal: 'Caixinha',
       type: 'saida', 
       amount: '',
       goal: goal._id 
@@ -55,7 +55,7 @@ const DashGoal = () => {
   const handleWithdrawClick = (goal) => {
     setTransactionPreset({
       title: `Resgate: ${goal.name}`,
-      category: 'Caixinha',
+      categoryGoal: 'Caixinha',
       type: 'entrada',
       amount: '',
       goal: goal._id 
@@ -146,7 +146,7 @@ const DashGoal = () => {
                   {goal.name}
                 </h3>
                 <div className="inline-block bg-bg-main px-3 py-1 rounded-lg border border-border-ui mt-2">
-                  <p className="text-[9px] font-black text-text-secondary uppercase tracking-widest opacity-80">{goal.category}</p>
+                  <p className="text-[9px] font-black text-text-secondary uppercase tracking-widest opacity-80">{goal.categoryGoal}</p>
                 </div>
               </div>
 

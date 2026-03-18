@@ -1,23 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Wallet, ArrowUpCircle, ArrowDownCircle, Loader2, Calendar } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import api from '../../../services/api';
+import api from '../../../services/Api';
 
 const DashPanel = () => {
   const [transactions, setTransactions] = useState([]);
   const [summary, setSummary] = useState({ balance: 0, income: 0, expense: 0 });
   const [loading, setLoading] = useState(true);
-  const [timeFilter, setTimeFilter] = useState('anual'); // Anual como padrão conforme solicitado
+  const [timeFilter, setTimeFilter] = useState('anual');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const response = await api.get('/transactions');
         const data = response.data;
-        
-        // Ordena as transações por data (mais recente primeiro)
         const sortedData = [...data].sort((a, b) => new Date(b.date) - new Date(a.date));
-        
         setTransactions(sortedData);
         calculateSummary(data);
       } catch (err) {
@@ -36,55 +33,60 @@ const DashPanel = () => {
     const expense = items
       .filter(t => t.type === 'saida')
       .reduce((acc, curr) => acc + Number(curr.amount), 0);
-    
     setSummary({ income, expense, balance: income - expense });
   };
 
-  // Lógica de Filtragem e Agrupamento
   const chartData = useMemo(() => {
     const now = new Date();
-    const dailyData = {};
+    const dataMap = {};
+    const result = [];
 
-    const filtered = transactions.filter(t => {
-      const tDate = new Date(t.date);
-      if (timeFilter === 'semanal') {
-        // De hoje até o próximo sábado
-        const nextSaturday = new Date();
-        nextSaturday.setDate(now.getDate() + (6 - now.getDay()));
-        nextSaturday.setHours(23, 59, 59, 999);
-        return tDate >= now && tDate <= nextSaturday;
+    if (timeFilter === 'semanal') {
+      // Gera os últimos 7 dias começando de hoje para trás
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(now.getDate() - i);
+        const label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        dataMap[label] = { name: label, entradas: 0, saidas: 0, rawDate: new Date(d.setHours(0,0,0,0)) };
       }
-      if (timeFilter === 'mensal') {
-        // Últimos 30 dias
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(now.getDate() - 30);
-        return tDate >= thirtyDaysAgo;
+    } 
+    else if (timeFilter === 'mensal') {
+      // Últimos 30 dias
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(now.getDate() - i);
+        const label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        dataMap[label] = { name: label, entradas: 0, saidas: 0, rawDate: new Date(d.setHours(0,0,0,0)) };
       }
-      if (timeFilter === 'anual') {
-        // Últimos 12 meses
-        const twelveMonthsAgo = new Date();
-        twelveMonthsAgo.setMonth(now.getMonth() - 12);
-        return tDate >= twelveMonthsAgo;
+    }
+    else if (timeFilter === 'anual') {
+      // Últimos 12 meses
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(now.getMonth() - i);
+        const label = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
+        dataMap[label] = { name: label, entradas: 0, saidas: 0, rawDate: new Date(d.setDate(1)) };
       }
-      return true;
-    });
+    }
 
-    filtered.forEach(t => {
-      let label;
+    // Preenche com os dados reais das transações
+    transactions.forEach(t => {
       const d = new Date(t.date);
-      
+      let label;
+
       if (timeFilter === 'anual') {
         label = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
       } else {
         label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
       }
 
-      if (!dailyData[label]) dailyData[label] = { name: label, entradas: 0, saidas: 0, rawDate: d };
-      if (t.type === 'entrada') dailyData[label].entradas += Number(t.amount);
-      else dailyData[label].saidas += Number(t.amount);
+      if (dataMap[label]) {
+        if (t.type === 'entrada') dataMap[label].entradas += Number(t.amount);
+        else dataMap[label].saidas += Number(t.amount);
+      }
     });
 
-    return Object.values(dailyData).sort((a, b) => a.rawDate - b.rawDate);
+    return Object.values(dataMap).sort((a, b) => a.rawDate - b.rawDate);
   }, [transactions, timeFilter]);
 
   const pieData = useMemo(() => {

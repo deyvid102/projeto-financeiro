@@ -11,7 +11,7 @@ const GoalSchema = new mongoose.Schema({
     required: [true, 'O nome da caixinha é obrigatório'],
     trim: true
   },
-  category: {
+  categoryGoal: {
     type: String,
     enum: ['emergencia', 'carro', 'viagem', 'casa', 'educacao', 'lazer', 'outros'],
     default: 'outros'
@@ -55,6 +55,5 @@ GoalSchema.virtual('progress').get(function() {
   return parseFloat(Math.min(progress, 100).toFixed(2));
 });
 
-// A LINHA QUE RESOLVE O ERRO:
 const Goal = mongoose.model('Goal', GoalSchema);
 export default Goal;

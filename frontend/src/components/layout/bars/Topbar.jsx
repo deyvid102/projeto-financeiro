@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Sun, Moon, User, LogOut, ChevronDown, Bell, 
-  CheckCircle2, Target, TrendingUp, CircleAlert, Loader2, Wallet 
+  CheckCircle2, Target, TrendingUp, CircleAlert, Loader2, Wallet, X 
 } from 'lucide-react';
 import { useTheme } from '../../ThemeContext';
 import { useNavigate } from 'react-router-dom';
-import api from '../../../services/Api';
+import api from '../../../services/api';
 
 const Topbar = () => {
   const { isDarkMode, toggleTheme } = useTheme();
@@ -13,90 +13,82 @@ const Topbar = () => {
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  
   const [notifications, setNotifications] = useState([]);
   const [loadingNotifs, setLoadingNotifs] = useState(true);
 
-  useEffect(() => {
-    const fetchSystemAlerts = async () => {
-      setLoadingNotifs(true);
-      try {
-        const [transRes, investRes, goalsRes] = await Promise.all([
-          api.get('/transactions'), 
-          api.get('/investments'),
-          api.get('/goals')
-        ]);
+  // 1. Função de busca isolada para ser reutilizada
+  const fetchSystemAlerts = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoadingNotifs(true);
+    try {
+      const [transRes, investRes, goalsRes] = await Promise.all([
+        api.get('/transactions'), 
+        api.get('/investments'),
+        api.get('/goals')
+      ]);
 
-        const alerts = [];
-        const today = new Date();
+      const dismissedIds = JSON.parse(localStorage.getItem('dismissed_notifications') || '[]');
+      const alerts = [];
+      const today = new Date();
 
-        // 1. RECORRÊNCIAS (Parcelas finalizadas)
-        const recurrings = transRes.data.filter(t => t.totalInstallments > 0);
-        recurrings.forEach(rec => {
-          if (rec.currentInstallment === rec.totalInstallments) {
-            alerts.push({
-              id: `rec-${rec._id}`,
-              type: 'recurring',
-              title: 'Parcelas Finalizadas',
-              desc: `A recorrência "${rec.title || rec.description}" foi concluída.`,
-              icon: <CheckCircle2 size={14} className="text-emerald-500" />,
-              date: new Date(rec.date)
-            });
-          }
-        });
+      // --- Lógica de Alertas (Simplificada para o exemplo) ---
+      
+      // Recorrências
+      transRes.data.filter(t => t.totalInstallments > 0).forEach(rec => {
+        const id = `rec-${rec._id}`;
+        if (rec.currentInstallment === rec.totalInstallments && !dismissedIds.includes(id)) {
+          alerts.push({ id, title: 'Parcelas Finalizadas', desc: `"${rec.title}" concluída.`, icon: <CheckCircle2 size={14} className="text-emerald-500" />, date: new Date(rec.date) });
+        }
+      });
 
-        // 2. INVESTIMENTOS (Vencimento e Saques Pendentes)
-        investRes.data.forEach(inv => {
-          const end = new Date(inv.endDate);
-          
-          // Se a data de término passou E ainda não foi marcado como liquidado
-          if (end <= today && !inv.isLiquidated) {
-            alerts.push({
-              id: `inv-liquid-${inv._id}`,
-              type: 'invest',
-              title: 'Saque Disponível',
-              desc: `O investimento "${inv.name}" venceu. Realize o resgate de R$ ${inv.currentValue?.toLocaleString('pt-BR')}`,
-              icon: <Wallet size={14} className="text-amber-500" />,
-              date: end
-            });
-          } 
-          // Alerta de que finaliza hoje (se status ainda não for finalizado)
-          else if (end.toDateString() === today.toDateString() && inv.status !== 'finalizado') {
-            alerts.push({
-              id: `inv-end-${inv._id}`,
-              type: 'invest',
-              title: 'Vencimento Hoje',
-              desc: `Seu título "${inv.name}" encerra o ciclo hoje.`,
-              icon: <TrendingUp size={14} className="text-cyan-400" />,
-              date: end
-            });
-          }
-        });
+      // Investimentos
+      investRes.data.forEach(inv => {
+        const end = new Date(inv.endDate);
+        const idLiquid = `inv-liquid-${inv._id}`;
+        const idWithdraw = `inv-withdrawn-${inv._id}`;
 
-        // 3. CAIXINHAS (Meta atingida)
-        goalsRes.data.forEach(goal => {
-          if (goal.currentAmount >= goal.targetAmount) {
-            alerts.push({
-              id: `goal-${goal._id}`,
-              type: 'goal',
-              title: 'Cofre Lotado!',
-              desc: `Sua meta "${goal.name}" foi 100% atingida.`,
-              icon: <Target size={14} className="text-brand" />,
-              date: new Date()
-            });
-          }
-        });
+        if (end <= today && !inv.isLiquidated && !dismissedIds.includes(idLiquid)) {
+          alerts.push({ id: idLiquid, title: 'Saque Disponível', desc: `Resgate ${inv.name}`, icon: <Wallet size={14} className="text-amber-500" />, date: end });
+        } else if (inv.status === 'sacado' && !dismissedIds.includes(idWithdraw)) {
+          alerts.push({ id: idWithdraw, title: 'Valor Resgatado', desc: `"${inv.name}" enviado ao saldo.`, icon: <CheckCircle2 size={14} className="text-blue-500" />, date: new Date() });
+        }
+      });
 
-        setNotifications(alerts.sort((a, b) => b.date - a.date));
-      } catch (err) {
-        console.error("Erro ao carregar notificações:", err);
-      } finally {
-        setLoadingNotifs(false);
-      }
-    };
+      // Caixinhas
+      goalsRes.data.forEach(goal => {
+        const id = `goal-${goal._id}`;
+        if (goal.currentAmount >= goal.targetAmount && !dismissedIds.includes(id)) {
+          alerts.push({ id, title: 'Cofre Lotado!', desc: `Meta "${goal.name}" atingida.`, icon: <Target size={14} className="text-brand" />, date: new Date() });
+        }
+      });
 
-    fetchSystemAlerts();
+      setNotifications(alerts.sort((a, b) => b.date - a.date));
+    } catch (err) {
+      console.error("Erro ao sincronizar notificações:", err);
+    } finally {
+      setLoadingNotifs(false);
+    }
   }, []);
+
+  // 2. Efeito de Atualização Automática (Polling)
+  useEffect(() => {
+    // Busca inicial (com loader)
+    fetchSystemAlerts(false);
+
+    // Cria o intervalo para atualizar silenciosamente a cada 30 segundos
+    const interval = setInterval(() => {
+      fetchSystemAlerts(true); 
+    }, 30000); // 30s é um tempo seguro para não sobrecarregar o servidor
+
+    return () => clearInterval(interval); // Limpa o intervalo ao fechar o componente
+  }, [fetchSystemAlerts]);
+
+  const dismissNotification = (id) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+    const dismissed = JSON.parse(localStorage.getItem('dismissed_notifications') || '[]');
+    if (!dismissed.includes(id)) {
+      localStorage.setItem('dismissed_notifications', JSON.stringify([...dismissed, id]));
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -112,6 +104,7 @@ const Topbar = () => {
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Painel de Notificações */}
         <div className="relative">
           <button 
             onClick={() => { setIsNotifOpen(!isNotifOpen); setIsMenuOpen(false); }}
@@ -121,7 +114,7 @@ const Topbar = () => {
           >
             <Bell size={18} />
             {notifications.length > 0 && (
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-bg-main animate-pulse" />
+              <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-bg-main animate-pulse" />
             )}
           </button>
 
@@ -131,9 +124,11 @@ const Topbar = () => {
               <div className="absolute right-0 mt-3 w-80 bg-bg-card border border-border-ui rounded-[2rem] shadow-2xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
                 <div className="p-5 border-b border-border-ui/50 flex justify-between items-center bg-bg-main/20">
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-text-primary">Monitor de Ativos</h3>
-                  <span className="px-2 py-0.5 bg-brand/10 text-brand text-[8px] font-black rounded-lg uppercase">
-                    {notifications.length} Pendentes
-                  </span>
+                  {notifications.length > 0 && (
+                    <span className="px-2 py-0.5 bg-brand text-white text-[8px] font-black rounded-lg uppercase animate-pulse">
+                      Live
+                    </span>
+                  )}
                 </div>
                 
                 <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
@@ -141,11 +136,18 @@ const Topbar = () => {
                     <div className="p-10 flex justify-center"><Loader2 className="animate-spin text-brand" size={20} /></div>
                   ) : notifications.length > 0 ? (
                     notifications.map((n) => (
-                      <div key={n.id} className="p-4 border-b border-border-ui/30 hover:bg-bg-main/40 transition-colors flex gap-4">
+                      <div 
+                        key={n.id} 
+                        onClick={() => dismissNotification(n.id)}
+                        className="p-4 border-b border-border-ui/30 hover:bg-bg-main/40 transition-colors flex gap-4 relative group cursor-pointer"
+                      >
                         <div className="mt-1 p-2 bg-bg-main rounded-lg h-fit border border-border-ui/50">{n.icon}</div>
                         <div className="flex-1">
                           <p className="text-[10px] font-black text-text-primary uppercase tracking-tight">{n.title}</p>
                           <p className="text-[11px] text-text-secondary mt-1 leading-relaxed font-medium">{n.desc}</p>
+                        </div>
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                          <X size={14} className="text-text-secondary hover:text-red-500" />
                         </div>
                       </div>
                     ))
@@ -161,6 +163,7 @@ const Topbar = () => {
           )}
         </div>
 
+        {/* Tema e Perfil */}
         <button onClick={toggleTheme} className="p-2.5 rounded-xl text-text-secondary hover:bg-bg-card hover:text-brand transition-all border border-transparent hover:border-border-ui/50">
           {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
         </button>

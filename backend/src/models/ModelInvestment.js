@@ -34,7 +34,7 @@ const investmentSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pendente', 'em andamento', 'finalizado'],
+      enum: ['pendente', 'em andamento', 'finalizado', 'sacado'],
       default: 'em andamento' 
     },
     isLiquidated: {

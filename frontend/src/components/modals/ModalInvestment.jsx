@@ -7,9 +7,6 @@ import SelectStyle from '../SelectStyle';
 const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => {
   const { showAlert } = useAlert();
   const [loading, setLoading] = useState(false);
-  
-  const [shouldRender, setShouldRender] = useState(isOpen);
-  const [animating, setAnimating] = useState(false);
 
   const initialState = {
     name: '',
@@ -23,19 +20,11 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
 
   const [formData, setFormData] = useState(initialState);
 
+  // Resetar o formulário quando o modal fechar
   useEffect(() => {
-    let timeoutId;
-    if (isOpen) {
-      setShouldRender(true);
-      timeoutId = setTimeout(() => setAnimating(true), 50);
-    } else {
-      setAnimating(false);
-      timeoutId = setTimeout(() => {
-        setShouldRender(false);
-        setFormData(initialState); 
-      }, 400);
+    if (!isOpen) {
+      setFormData(initialState);
     }
-    return () => clearTimeout(timeoutId);
   }, [isOpen]);
 
   const handleSubmit = async (e) => {
@@ -43,19 +32,18 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
     setLoading(true);
 
     try {
-      // AJUSTE: Enviando para /investments e formatando números
       const dataToSend = {
         ...formData,
         amountInvested: Number(formData.amountInvested),
         expectedProfitability: Number(formData.expectedProfitability),
       };
 
-      const res = await api.post('/investments', dataToSend);
+      await api.post('/investments', dataToSend);
       
       showAlert('Ativo MAX registrado com sucesso!', 'success');
       
       if (typeof onRefresh === 'function') onRefresh();
-      // Se houver lógica de transação vinculada, o backend cuidará ou chamamos aqui
+      
       if (formData.addAsTransaction && typeof onTransactionAdded === 'function') {
         onTransactionAdded();
       }
@@ -69,24 +57,14 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
     }
   };
 
-  if (!shouldRender) return null;
+  // Retorno nulo imediato se não estiver aberto (sem delays de animação)
+  if (!isOpen) return null;
 
   return (
-    <div 
-      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-500 ease-in-out ${
-        animating ? 'bg-black/80 backdrop-blur-md opacity-100' : 'bg-transparent backdrop-blur-none opacity-0 pointer-events-none'
-      }`}
-    >
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
       <div className="absolute inset-0" onClick={onClose} />
 
-      <div 
-        className={`bg-bg-card w-full max-w-md rounded-[3.5rem] border border-border-ui shadow-2xl relative overflow-visible transition-all duration-500 transform ${
-          animating 
-            ? 'scale-100 translate-y-0 opacity-100' 
-            : 'scale-90 translate-y-20 opacity-0'
-        }`}
-        style={{ transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)' }}
-      >
+      <div className="bg-bg-card w-full max-w-md rounded-[3.5rem] border border-border-ui shadow-2xl relative overflow-visible">
         
         {/* Header */}
         <div className="flex justify-between items-center p-8 border-b border-border-ui/50">
@@ -105,7 +83,7 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
           <div className="space-y-2 text-left">
             <label className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary ml-2 block">Nome do Ativo</label>
             <div className="relative group">
-              <Briefcase className="absolute left-5 top-1/2 -translate-y-1/2 text-brand transition-transform group-focus-within:scale-110" size={18} />
+              <Briefcase className="absolute left-5 top-1/2 -translate-y-1/2 text-brand" size={18} />
               <input 
                 required type="text" value={formData.name} placeholder="Ex: CDB 110% CDI"
                 className="w-full bg-bg-main border border-border-ui rounded-[1.5rem] py-5 pl-14 pr-4 text-sm font-black italic outline-none focus:border-brand transition-all text-text-primary shadow-inner"
@@ -165,7 +143,7 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
 
           <div 
             onClick={() => setFormData({...formData, addAsTransaction: !formData.addAsTransaction})}
-            className={`flex items-center justify-between p-5 rounded-[2.2rem] cursor-pointer transition-all border group ${formData.addAsTransaction ? 'bg-brand/10 border-brand' : 'bg-bg-main border-border-ui/50'}`}
+            className={`flex items-center justify-between p-5 rounded-[2.2rem] cursor-pointer transition-all border ${formData.addAsTransaction ? 'bg-brand/10 border-brand' : 'bg-bg-main border-border-ui/50'}`}
           >
             <div className="flex items-center gap-4">
               <div className={`p-3 rounded-2xl transition-all ${formData.addAsTransaction ? 'bg-brand text-white' : 'bg-bg-card text-text-secondary border border-border-ui'}`}>

@@ -14,10 +14,6 @@ const ModalCategory = ({ isOpen, onClose }) => {
   
   const { showAlert } = useAlert();
 
-  // CONTROLE DE ANIMAÇÃO
-  const [shouldRender, setShouldRender] = useState(isOpen);
-  const [animating, setAnimating] = useState(false);
-
   const fetchCategories = async () => {
     try {
       setLoading(true);
@@ -30,23 +26,15 @@ const ModalCategory = ({ isOpen, onClose }) => {
     }
   };
 
+  // Carrega os dados e limpa estados internos ao abrir/fechar
   useEffect(() => {
-    let timeoutId;
     if (isOpen) {
-      setShouldRender(true);
       fetchCategories();
-      timeoutId = setTimeout(() => setAnimating(true), 50);
     } else {
-      setAnimating(false);
-      timeoutId = setTimeout(() => {
-        setShouldRender(false);
-        // Reset de estados internos ao fechar
-        setEditingId(null);
-        setEditName('');
-        setNewCategory('');
-      }, 400);
+      setEditingId(null);
+      setEditName('');
+      setNewCategory('');
     }
-    return () => clearTimeout(timeoutId);
   }, [isOpen]);
 
   const handleAddCategory = async (e) => {
@@ -89,24 +77,13 @@ const ModalCategory = ({ isOpen, onClose }) => {
     setEditName(cat.name);
   };
 
-  if (!shouldRender) return null;
+  if (!isOpen) return null;
 
   return (
-    <div 
-      className={`fixed inset-0 z-[1000] flex items-center justify-center p-4 transition-all duration-400 ease-in-out ${
-        animating ? 'bg-black/80 backdrop-blur-md opacity-100' : 'bg-transparent backdrop-blur-none opacity-0 pointer-events-none'
-      }`}
-    >
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
       <div className="absolute inset-0" onClick={onClose} />
 
-      <div 
-        className={`bg-bg-card w-full max-w-lg rounded-[3rem] border border-border-ui shadow-2xl relative overflow-hidden transition-all duration-500 transform ${
-          animating 
-            ? 'scale-100 translate-y-0 opacity-100' 
-            : 'scale-95 translate-y-12 opacity-0'
-        }`}
-        style={{ transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)' }}
-      >
+      <div className="bg-bg-card w-full max-w-lg rounded-[3rem] border border-border-ui shadow-2xl relative overflow-hidden">
         
         {/* HEADER */}
         <div className="flex justify-between items-center p-8 border-b border-border-ui/50">
@@ -150,7 +127,7 @@ const ModalCategory = ({ isOpen, onClose }) => {
                 <div key={cat._id} className="group flex justify-between items-center p-5 bg-bg-main/40 hover:bg-bg-main rounded-[2rem] border border-border-ui/50 transition-all hover:border-brand/30">
                   
                   {editingId === cat._id ? (
-                    <div className="flex items-center gap-2 flex-1 animate-in slide-in-from-left-2 duration-200">
+                    <div className="flex items-center gap-2 flex-1">
                       <input 
                         autoFocus
                         className="flex-1 bg-bg-card border-2 border-brand px-4 py-2 rounded-xl text-sm font-black text-text-primary outline-none italic"

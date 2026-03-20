@@ -8,10 +8,6 @@ const ModalGoal = ({ isOpen, onClose, onRefresh }) => {
   const { showAlert } = useAlert();
   const [loading, setLoading] = useState(false);
 
-  // LOGICA DE ANIMAÇÃO
-  const [shouldRender, setShouldRender] = useState(isOpen);
-  const [animating, setAnimating] = useState(false);
-
   const categories = [
     { name: 'Emergência', value: 'emergencia' },
     { name: 'Carro', value: 'carro' },
@@ -35,63 +31,52 @@ const ModalGoal = ({ isOpen, onClose, onRefresh }) => {
     name: '',
     categoryGoal: 'outros',
     targetAmount: '',
-    color: '#06b6d4',
+    color: '#06b6d4', // Cor inicial
     icon: 'PiggyBank'
   };
 
   const [formData, setFormData] = useState(initialState);
 
   useEffect(() => {
-    let timeoutId;
-    if (isOpen) {
-      setShouldRender(true);
-      timeoutId = setTimeout(() => setAnimating(true), 50);
-    } else {
-      setAnimating(false);
-      timeoutId = setTimeout(() => {
-        setShouldRender(false);
-        setFormData(initialState); // Reseta o form ao terminar de fechar
-      }, 400);
+    if (!isOpen) {
+      setFormData(initialState);
     }
-    return () => clearTimeout(timeoutId);
   }, [isOpen]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    
     try {
-      await api.post('/goals', {
-        ...formData,
+      // Garantindo que todos os campos, incluindo a cor selecionada, sejam enviados
+      const payload = {
+        name: formData.name,
+        categoryGoal: formData.categoryGoal,
         targetAmount: Number(formData.targetAmount),
-      });
+        color: formData.color, // A cor selecionada no estado
+        icon: formData.icon
+      };
+
+      await api.post('/goals', payload);
+      
       showAlert('Cofre configurado com sucesso!', 'success');
       onRefresh();
       onClose();
     } catch (err) {
+      console.error("Erro ao salvar:", err);
       showAlert('Erro ao criar caixinha', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  if (!shouldRender) return null;
+  if (!isOpen) return null;
 
   return (
-    <div 
-      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-400 ease-in-out ${
-        animating ? 'bg-black/80 backdrop-blur-md opacity-100' : 'bg-transparent backdrop-blur-none opacity-0 pointer-events-none'
-      }`}
-    >
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
       <div className="absolute inset-0" onClick={onClose} />
 
-      <div 
-        className={`bg-bg-card w-full max-w-md rounded-[3rem] border border-border-ui shadow-2xl relative overflow-visible transition-all duration-500 transform ${
-          animating 
-            ? 'scale-100 translate-y-0 opacity-100' 
-            : 'scale-90 translate-y-12 opacity-0'
-        }`}
-        style={{ transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)' }}
-      >
+      <div className="bg-bg-card w-full max-w-md rounded-[3rem] border border-border-ui shadow-2xl relative overflow-visible">
         
         <div className="flex justify-between items-center p-8 border-b border-border-ui/50">
           <div className="text-left">
@@ -147,6 +132,7 @@ const ModalGoal = ({ isOpen, onClose, onRefresh }) => {
               <Palette size={14} className="text-brand" />
               <label className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary block">Identidade Visual</label>
             </div>
+            {/* Seletor de Cores */}
             <div className="flex justify-between items-center p-5 bg-bg-main rounded-[2rem] border border-border-ui shadow-inner">
               <div className="flex gap-2.5">
                 {colors.map((c) => (
@@ -154,13 +140,18 @@ const ModalGoal = ({ isOpen, onClose, onRefresh }) => {
                     key={c.value}
                     type="button"
                     onClick={() => setFormData({...formData, color: c.value})}
-                    className={`w-7 h-7 rounded-full transition-all hover:scale-125 cursor-pointer ${formData.color === c.value ? 'ring-4 ring-brand/20 scale-110 shadow-lg' : 'opacity-40 hover:opacity-100'}`}
+                    className={`w-7 h-7 rounded-full transition-all hover:scale-125 cursor-pointer ${
+                      formData.color === c.value 
+                        ? 'ring-4 ring-white/20 scale-110 shadow-lg border-2 border-white' 
+                        : 'opacity-40 hover:opacity-100'
+                    }`}
                     style={{ backgroundColor: c.value }}
+                    title={c.name}
                   />
                 ))}
               </div>
               <div className="p-3 bg-bg-card rounded-2xl border border-border-ui">
-                <PiggyBank size={20} style={{ color: formData.color }} strokeWidth={2.5} className="transition-colors duration-500" />
+                <PiggyBank size={20} style={{ color: formData.color }} strokeWidth={2.5} className="transition-colors duration-200" />
               </div>
             </div>
           </div>

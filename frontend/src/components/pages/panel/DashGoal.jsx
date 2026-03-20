@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Loader2, Plus, Target, PiggyBank, Trash2, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
-import api from '../../../services/Api';
+import api from '../../../services/api';
 import { useAlert } from '../../../context/AlertContext';
 import ModalConfirm from '../../modals/ModalConfirm';
 import ModalGoal from '../../modals/ModalGoal';
@@ -38,27 +38,27 @@ const DashGoal = () => {
 
   const handleCloseTransactionModal = useCallback(() => {
     setIsTransactionModalOpen(false);
-    setTimeout(() => setTransactionPreset(null), 300);
+    setTransactionPreset(null);
   }, []);
 
   const handleDepositClick = (goal) => {
     setTransactionPreset({
+      ...goal, // Passa o objeto completo (inclui currentAmount e _id)
       title: `Depósito: ${goal.name}`,
-      categoryGoal: 'Caixinha',
-      type: 'saida', 
+      category: 'caixinha',
+      type: 'saida', // Sai do saldo principal -> vai pro cofre
       amount: '',
-      goal: goal._id 
     });
     setIsTransactionModalOpen(true);
   };
 
   const handleWithdrawClick = (goal) => {
     setTransactionPreset({
+      ...goal, // Passa o objeto completo para validação de saldo
       title: `Resgate: ${goal.name}`,
-      categoryGoal: 'Caixinha',
-      type: 'entrada',
+      category: 'caixinha',
+      type: 'entrada', // Sai do cofre -> volta pro saldo principal
       amount: '',
-      goal: goal._id 
     });
     setIsTransactionModalOpen(true);
   };
@@ -66,7 +66,7 @@ const DashGoal = () => {
   const handleDelete = async (id) => {
     try {
       await api.delete(`/goals/${id}`);
-      showAlert('Caixinha removida com sucesso!', 'success');
+      showAlert('Caixinha removida!', 'success');
       fetchGoals();
     } catch (err) {
       showAlert('Erro ao remover caixinha', 'error');
@@ -84,9 +84,7 @@ const DashGoal = () => {
 
   return (
     <div className="w-full pb-10 px-1 overflow-hidden">
-      
-      {/* 1. Animação do Header */}
-      <div className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6 animate-in fade-in slide-in-from-top-6 duration-700 fill-mode-both">
+      <div className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6 animate-in fade-in slide-in-from-top-6 duration-700">
         <div className="text-left">
           <h1 className="text-4xl font-black text-text-primary italic uppercase tracking-tighter">
             suas <span className="text-brand">caixinhas</span>
@@ -97,34 +95,25 @@ const DashGoal = () => {
         </div>
         <button 
           onClick={() => setIsModalGoalOpen(true)}
-          className="bg-brand text-white px-8 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest hover:shadow-2xl hover:shadow-brand/30 transition-all flex items-center justify-center gap-3 cursor-pointer group active:scale-95"
+          className="bg-brand text-white px-8 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest hover:shadow-2xl transition-all flex items-center justify-center gap-3 active:scale-95"
         >
-          <Plus size={18} strokeWidth={3} className="group-hover:rotate-90 transition-transform" /> 
+          <Plus size={18} strokeWidth={3} /> 
           <span>Criar Caixinha</span>
         </button>
       </div>
 
-      {/* 2. Grid de Caixinhas com Cascade (Stagger) */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
         {goals.map((goal, index) => (
           <div 
             key={goal._id} 
-            // A classe 'fill-mode-both' garante que ele comece invisível por causa do delay
             className="animate-in fade-in slide-in-from-bottom-8 duration-700 fill-mode-both"
-            style={{ 
-              // Multiplicamos o index para criar o atraso entre cada card
-              animationDelay: `${(index + 1) * 150}ms` 
-            }}
+            style={{ animationDelay: `${(index + 1) * 100}ms` }}
           >
-            <div className="bg-bg-card border border-border-ui rounded-[3rem] p-8 shadow-sm hover:border-brand transition-all group relative overflow-hidden flex flex-col justify-between h-full">
-              
+            <div className="bg-bg-card border border-border-ui rounded-[3rem] p-8 shadow-sm hover:border-brand transition-all group flex flex-col justify-between h-full">
               <div className="flex justify-between items-start mb-8">
                 <div 
-                  className="p-4 rounded-[1.5rem] text-white shadow-2xl transition-transform group-hover:scale-110" 
-                  style={{ 
-                    backgroundColor: goal.color || '#3b82f6',
-                    boxShadow: `0 10px 20px -5px ${goal.color}66`
-                  }}
+                  className="p-4 rounded-[1.5rem] text-white shadow-2xl" 
+                  style={{ backgroundColor: goal.color || '#3b82f6' }}
                 >
                   <PiggyBank size={24} strokeWidth={2.5} />
                 </div>
@@ -132,10 +121,10 @@ const DashGoal = () => {
                   onClick={() => setConfirmModal({
                     isOpen: true,
                     title: 'Encerrar Caixinha',
-                    message: `Deseja realmente remover a caixinha "${goal.name}"? Esta ação não pode ser desfeita.`,
+                    message: `Deseja remover "${goal.name}"?`,
                     onConfirm: () => handleDelete(goal._id)
                   })}
-                  className="p-2.5 text-text-secondary hover:bg-red-500/10 hover:text-red-500 rounded-xl transition-all cursor-pointer border border-transparent hover:border-red-500/20"
+                  className="p-2.5 text-text-secondary hover:text-red-500 rounded-xl transition-all"
                 >
                   <Trash2 size={20} />
                 </button>
@@ -161,19 +150,17 @@ const DashGoal = () => {
                 </div>
               </div>
 
-              {/* Progress Bar com animação delay de preenchimento */}
               <div className="space-y-3 mb-10">
                 <div className="flex justify-between items-center px-1">
-                  <span className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Capacidade do Cofre</span>
+                  <span className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Progresso</span>
                   <span className="text-[11px] font-black text-brand italic bg-brand/10 px-2 py-0.5 rounded-md">{goal.progress}%</span>
                 </div>
                 <div className="h-4 w-full bg-bg-main rounded-full overflow-hidden border border-border-ui/50 p-1 shadow-inner">
                   <div 
-                    className="h-full rounded-full transition-all duration-1000 ease-out delay-700"
+                    className="h-full rounded-full transition-all duration-1000 ease-out"
                     style={{ 
                       width: `${Math.min(goal.progress, 100)}%`,
                       backgroundColor: goal.color || '#3b82f6',
-                      boxShadow: `0 0 15px ${goal.color}66`
                     }}
                   />
                 </div>
@@ -182,13 +169,13 @@ const DashGoal = () => {
               <div className="grid grid-cols-2 gap-4">
                 <button 
                   onClick={() => handleDepositClick(goal)}
-                  className="flex items-center justify-center gap-2 py-4 bg-bg-main border border-border-ui rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-green-500 hover:text-white hover:border-green-500 transition-all cursor-pointer active:scale-95"
+                  className="flex items-center justify-center gap-2 py-4 bg-bg-main border border-border-ui rounded-2xl text-[10px] font-black uppercase hover:bg-green-500 hover:text-white transition-all active:scale-95"
                 >
                   <ArrowUpRight size={16} strokeWidth={3} /> Guardar
                 </button>
                 <button 
                   onClick={() => handleWithdrawClick(goal)}
-                  className="flex items-center justify-center gap-2 py-4 bg-bg-main border border-border-ui rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white hover:border-red-500 transition-all cursor-pointer active:scale-95"
+                  className="flex items-center justify-center gap-2 py-4 bg-bg-main border border-border-ui rounded-2xl text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition-all active:scale-95"
                 >
                   <ArrowDownLeft size={16} strokeWidth={3} /> Resgatar
                 </button>
@@ -198,27 +185,11 @@ const DashGoal = () => {
         ))}
       </div>
 
-      {/* 3. Empty State Animation */}
-      {goals.length === 0 && (
-        <div className="py-24 flex flex-col items-center justify-center border-4 border-dashed border-border-ui/40 rounded-[3rem] bg-bg-main/20 animate-in fade-in zoom-in-95 duration-700">
-          <div className="w-20 h-20 bg-bg-card rounded-[2rem] flex items-center justify-center border border-border-ui mb-6 shadow-xl">
-            <Target size={32} className="text-text-secondary opacity-20" />
-          </div>
-          <p className="text-[11px] font-black text-text-secondary uppercase tracking-[0.3em] italic">Nenhum objetivo traçado no radar</p>
-        </div>
-      )}
-
-      {/* MODAIS */}
-      <ModalGoal 
-        isOpen={isModalGoalOpen} 
-        onClose={() => setIsModalGoalOpen(false)} 
-        onRefresh={fetchGoals} 
-      />
+      <ModalGoal isOpen={isModalGoalOpen} onClose={() => setIsModalGoalOpen(false)} onRefresh={fetchGoals} />
       <ModalTransactions 
         isOpen={isTransactionModalOpen}
         onClose={handleCloseTransactionModal} 
         onTransactionAdded={fetchGoals}
-        onRefresh={fetchGoals}
         presetData={transactionPreset}
       />
       <ModalConfirm 

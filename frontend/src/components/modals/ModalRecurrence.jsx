@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Trash2, Loader2, CreditCard, Repeat, Tag, DollarSign, Target, Hash, Plus, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
+import { X, Trash2, Loader2, CreditCard, Repeat, Tag, DollarSign, Target, Hash, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import api from "@/services/api"; 
 import { useAlert } from "@/context/AlertContext";
 import ModalConfirm from "@/components/modals/ModalConfirm";
@@ -139,19 +139,24 @@ const ModalRecurrence = ({ isOpen, onClose, onAdded }) => {
 
   return (
     <>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-6">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 md:p-6">
         <div onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-md" />
-        <div className="bg-bg-card w-full max-w-4xl max-h-[90vh] rounded-[2.5rem] border border-border-ui shadow-2xl relative z-10 flex flex-col md:flex-row overflow-hidden">
+        
+        {/* Container Principal: Coluna no mobile, Linha no Desktop */}
+        <div className="bg-bg-card w-full max-w-5xl h-full max-h-[95vh] md:max-h-[85vh] rounded-[1.5rem] md:rounded-[2.5rem] border border-border-ui shadow-2xl relative z-10 flex flex-col md:flex-row overflow-hidden">
           
-          <div className="flex-1 border-r border-border-ui/50 overflow-y-auto custom-scrollbar">
-            <div className="p-6 bg-brand text-white sticky top-0 z-20 flex justify-between items-center">
-              <h2 className="text-xl font-black uppercase italic tracking-tighter">Programar <span className="text-black/30">Recorrência</span></h2>
+          {/* Coluna Esquerda: Formulário */}
+          <div className="w-full md:w-1/2 flex flex-col border-b md:border-b-0 md:border-r border-border-ui/50 overflow-y-auto custom-scrollbar">
+            <div className="p-5 md:p-6 bg-brand text-white sticky top-0 z-20 flex justify-between items-center">
+              <h2 className="text-lg md:text-xl font-black uppercase italic tracking-tighter">Programar <span className="text-black/30">Recorrência</span></h2>
+              {/* Botão fechar visível no mobile dentro do header do formulário */}
+              <button onClick={onClose} className="md:hidden text-white/80"><X size={24}/></button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-5 md:p-6 space-y-4">
               <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => setFormData({...formData, type: 'entrada'})} className={`py-2.5 rounded-xl font-black uppercase text-[9px] border-2 ${formData.type === 'entrada' ? 'bg-green-500 border-green-500 text-white' : 'bg-bg-main/50 border-border-ui/50 text-text-secondary'}`}>Entrada</button>
-                <button type="button" onClick={() => setFormData({...formData, type: 'saida'})} className={`py-2.5 rounded-xl font-black uppercase text-[9px] border-2 ${formData.type === 'saida' ? 'bg-red-500 border-red-500 text-white' : 'bg-bg-main/50 border-border-ui/50 text-text-secondary'}`}>Saída</button>
+                <button type="button" onClick={() => setFormData({...formData, type: 'entrada'})} className={`py-2.5 rounded-xl font-black uppercase text-[9px] border-2 transition-all ${formData.type === 'entrada' ? 'bg-green-500 border-green-500 text-white' : 'bg-bg-main/50 border-border-ui/50 text-text-secondary'}`}>Entrada</button>
+                <button type="button" onClick={() => setFormData({...formData, type: 'saida'})} className={`py-2.5 rounded-xl font-black uppercase text-[9px] border-2 transition-all ${formData.type === 'saida' ? 'bg-red-500 border-red-500 text-white' : 'bg-bg-main/50 border-border-ui/50 text-text-secondary'}`}>Saída</button>
               </div>
 
               <input 
@@ -166,13 +171,13 @@ const ModalRecurrence = ({ isOpen, onClose, onAdded }) => {
                   <DollarSign className="absolute left-3 opacity-30" size={14} />
                   <input type="number" placeholder="0.00" className="w-full bg-bg-main/50 border border-border-ui/50 p-4 pl-10 rounded-xl focus:border-brand outline-none font-bold text-sm text-text-primary" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} />
                 </div>
-                <button type="button" onClick={() => setFormData({...formData, isInstallment: !formData.isInstallment})} className={`flex items-center justify-center gap-2 rounded-xl border-2 font-black uppercase text-[9px] ${formData.isInstallment ? 'border-orange-500 bg-orange-500/10 text-orange-500' : 'border-border-ui/50 text-text-secondary'}`}>
+                <button type="button" onClick={() => setFormData({...formData, isInstallment: !formData.isInstallment})} className={`flex items-center justify-center gap-2 rounded-xl border-2 font-black uppercase text-[9px] transition-all ${formData.isInstallment ? 'border-orange-500 bg-orange-500/10 text-orange-500' : 'border-border-ui/50 text-text-secondary'}`}>
                   {formData.isInstallment ? <CreditCard size={14}/> : <Repeat size={14}/>} {formData.isInstallment ? 'Parcelado' : 'Fixo'}
                 </button>
               </div>
 
               {formData.isInstallment && (
-                <div className="relative flex items-center">
+                <div className="relative flex items-center animate-in fade-in slide-in-from-top-1">
                   <Hash className="absolute left-3 opacity-30" size={14} />
                   <input type="number" min="1" max="99" placeholder="Parcelas" className="w-full bg-bg-main/50 border border-orange-500/30 p-4 pl-10 rounded-xl focus:border-orange-500 outline-none font-bold text-sm text-text-primary" value={formData.totalInstallments} onChange={(e) => setFormData({...formData, totalInstallments: Math.min(99, parseInt(e.target.value) || 1)})} />
                   <span className="absolute right-4 text-[9px] font-black text-orange-500 uppercase italic">Máx 99x</span>
@@ -185,59 +190,72 @@ const ModalRecurrence = ({ isOpen, onClose, onAdded }) => {
                 <label className="text-[9px] font-black uppercase opacity-40 ml-1 italic">Repetição:</label>
                 <div className="grid grid-cols-3 gap-2">
                   {['monthly', 'weekly', 'yearly'].map(f => (
-                    <button key={f} type="button" onClick={() => setFormData({ ...formData, frequency: f, dayOfMonth: [], dayOfWeek: [], monthOfYear: [] })} className={`py-2.5 rounded-xl text-[9px] font-black uppercase border ${formData.frequency === f ? 'bg-brand/10 border-brand text-brand' : 'bg-bg-main/30 border-border-ui/50 text-text-secondary'}`}>{f === 'monthly' ? 'Mês' : f === 'weekly' ? 'Semana' : 'Ano'}</button>
+                    <button key={f} type="button" onClick={() => setFormData({ ...formData, frequency: f, dayOfMonth: [], dayOfWeek: [], monthOfYear: [] })} className={`py-2.5 rounded-xl text-[9px] font-black uppercase border transition-all ${formData.frequency === f ? 'bg-brand/10 border-brand text-brand' : 'bg-bg-main/30 border-border-ui/50 text-text-secondary'}`}>{f === 'monthly' ? 'Mês' : f === 'weekly' ? 'Semana' : 'Ano'}</button>
                   ))}
                 </div>
               </div>
 
-              <div className="bg-bg-main/20 p-4 rounded-2xl border border-border-ui/30">
+              <div className="bg-bg-main/20 p-4 rounded-2xl border border-border-ui/30 min-h-[140px] flex flex-col justify-center">
                   {renderPickers() || <p className="text-center text-[9px] uppercase font-black opacity-30 py-4 italic">Escolha uma frequência</p>}
               </div>
 
-              <button type="submit" disabled={loading} className="w-full bg-brand text-white py-4 rounded-xl font-black uppercase text-[9px] shadow-lg flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all">
+              <button type="submit" disabled={loading} className="w-full bg-brand text-white py-4 rounded-xl font-black uppercase text-[10px] shadow-lg flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all">
                 {loading ? <Loader2 className="animate-spin" size={14} /> : "CONFIRMAR PROGRAMAÇÃO"}
               </button>
             </form>
           </div>
 
-          <div className="flex-1 bg-bg-main/30 flex flex-col min-h-0">
-             <div className="p-6 border-b border-border-ui/50 flex justify-between items-center bg-bg-card/50 backdrop-blur-sm sticky top-0 z-20">
-               <h3 className="font-black uppercase italic text-base text-text-primary">Ativos</h3>
-               <button onClick={onClose} className="text-text-secondary hover:text-text-primary"><X size={18}/></button>
-             </div>
-             
-             <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
-               {recurrences.map(rec => (
-                 <div key={rec._id} className="bg-bg-card border border-border-ui/50 p-3 rounded-2xl flex items-center justify-between group hover:border-brand/40 transition-all">
-                   <div className="flex items-center gap-3 min-w-0">
-                     {/* Símbolo de Entrada/Saída */}
-                     {rec.type === 'entrada' ? (
-                       <ArrowUpCircle size={18} className="text-green-500 shrink-0 opacity-60" />
-                     ) : (
-                       <ArrowDownCircle size={18} className="text-red-500 shrink-0 opacity-60" />
-                     )}
-                     <div className="min-w-0">
-                       <p className="text-[9px] font-black uppercase truncate italic leading-none mb-1">{rec.title}</p>
-                       <p className="text-[8px] font-bold opacity-60">
-                         R$ {rec.amount.toFixed(2)} | {rec.isInstallment ? `${rec.currentInstallment}/${rec.totalInstallments} parc.` : rec.frequency}
-                       </p>
-                     </div>
-                   </div>
-                   <button onClick={() => { setIdToDelete(rec._id); setIsConfirmOpen(true); }} className="text-text-secondary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={12}/></button>
-                 </div>
-               ))}
-             </div>
+          {/* Coluna Direita: Listagem */}
+          <div className="w-full md:w-1/2 bg-bg-main/30 flex flex-col min-h-0 relative">
+              <div className="p-5 md:p-6 border-b border-border-ui/50 flex justify-between items-center bg-bg-card/50 backdrop-blur-sm sticky top-0 z-20">
+                <h3 className="font-black uppercase italic text-base text-text-primary">Ativos <span className="text-[10px] not-italic opacity-40 ml-2">({recurrences.length})</span></h3>
+                <button onClick={onClose} className="hidden md:block text-text-secondary hover:text-text-primary transition-colors"><X size={20}/></button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                {recurrences.length === 0 && !fetching && (
+                  <div className="h-32 flex flex-col items-center justify-center opacity-20 italic">
+                    <Repeat size={24} />
+                    <p className="text-[10px] font-black uppercase mt-2">Nenhuma recorrência</p>
+                  </div>
+                )}
 
-             {/* Botão de Caixinha no rodapé da lista */}
-             <div className="p-4 bg-bg-card/50 border-t border-border-ui/50">
-                <button 
-                  onClick={() => setIsGoalModalOpen(true)}
-                  className="w-full bg-brand/10 border border-brand/40 text-brand py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-brand hover:text-white transition-all group"
-                >
-                  <Target size={16} className="group-hover:scale-110 transition-transform"/>
-                  <span className="text-[9px] font-black uppercase italic">Programar Aporte Caixinha</span>
-                </button>
-             </div>
+                {recurrences.map(rec => (
+                  <div key={rec._id} className="bg-bg-card border border-border-ui/50 p-3.5 rounded-2xl flex items-center justify-between group hover:border-brand/40 transition-all shadow-sm">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {rec.type === 'entrada' ? (
+                        <ArrowUpCircle size={20} className="text-green-500 shrink-0 opacity-80" />
+                      ) : (
+                        <ArrowDownCircle size={20} className="text-red-500 shrink-0 opacity-80" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-black uppercase truncate italic leading-none mb-1 text-text-primary">{rec.title}</p>
+                        <p className="text-[9px] font-bold opacity-60 text-text-secondary">
+                          R$ {rec.amount.toFixed(2)} • {rec.isInstallment ? `${rec.currentInstallment}/${rec.totalInstallments}x` : rec.frequency}
+                        </p>
+                      </div>
+                    </div>
+                    {/* Botão de excluir sempre visível no mobile, hover no PC */}
+                    <button 
+                      onClick={() => { setIdToDelete(rec._id); setIsConfirmOpen(true); }} 
+                      className="text-text-secondary hover:text-red-500 p-2 md:opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <Trash2 size={14}/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Rodapé: Ação secundária */}
+              <div className="p-4 bg-bg-card/50 border-t border-border-ui/50">
+                 <button 
+                   onClick={() => setIsGoalModalOpen(true)}
+                   className="w-full bg-brand/10 border border-brand/40 text-brand py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-brand hover:text-white transition-all group"
+                 >
+                   <Target size={16} className="group-hover:scale-110 transition-transform"/>
+                   <span className="text-[10px] font-black uppercase italic">Programar Aporte Caixinha</span>
+                 </button>
+              </div>
           </div>
         </div>
 

@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Sun, Moon, User, LogOut, ChevronDown, Bell, 
-  CheckCircle2, Target, TrendingUp, CircleAlert, Loader2, Wallet, X 
+  Sun, Moon, LogOut, ChevronDown, Bell, Menu,
+  CheckCircle2, Target, CircleAlert, Loader2, Wallet, X 
 } from 'lucide-react';
 import { useTheme } from '../../ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../../../services/api';
 
-const Topbar = () => {
+const Topbar = ({ onOpenMobileMenu }) => {
   const { isDarkMode, toggleTheme } = useTheme();
   const navigate = useNavigate();
   
@@ -16,7 +16,6 @@ const Topbar = () => {
   const [notifications, setNotifications] = useState([]);
   const [loadingNotifs, setLoadingNotifs] = useState(true);
 
-  // 1. Função de busca isolada para ser reutilizada
   const fetchSystemAlerts = useCallback(async (isSilent = false) => {
     if (!isSilent) setLoadingNotifs(true);
     try {
@@ -30,8 +29,6 @@ const Topbar = () => {
       const alerts = [];
       const today = new Date();
 
-      // --- Lógica de Alertas (Simplificada para o exemplo) ---
-      
       // Recorrências
       transRes.data.filter(t => t.totalInstallments > 0).forEach(rec => {
         const id = `rec-${rec._id}`;
@@ -69,17 +66,10 @@ const Topbar = () => {
     }
   }, []);
 
-  // 2. Efeito de Atualização Automática (Polling)
   useEffect(() => {
-    // Busca inicial (com loader)
     fetchSystemAlerts(false);
-
-    // Cria o intervalo para atualizar silenciosamente a cada 30 segundos
-    const interval = setInterval(() => {
-      fetchSystemAlerts(true); 
-    }, 30000); // 30s é um tempo seguro para não sobrecarregar o servidor
-
-    return () => clearInterval(interval); // Limpa o intervalo ao fechar o componente
+    const interval = setInterval(() => { fetchSystemAlerts(true); }, 30000);
+    return () => clearInterval(interval);
   }, [fetchSystemAlerts]);
 
   const dismissNotification = (id) => {
@@ -96,49 +86,60 @@ const Topbar = () => {
   };
 
   return (
-    <header className="h-20 flex items-center justify-between px-8 bg-transparent relative z-40">
-      <div>
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary">
+    <header className="h-16 md:h-20 flex items-center justify-between px-4 md:px-8 bg-transparent relative z-50">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            setIsNotifOpen(false);
+            setIsMenuOpen(false);
+            onOpenMobileMenu?.();
+          }}
+          className="md:hidden p-2.5 rounded-xl transition-all border border-transparent hover:bg-bg-card/50 text-text-secondary"
+        >
+          <Menu size={22} />
+        </button>
+
+        <p className="hidden md:block text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary">
           Bem-vindo de volta, <span className="text-brand italic">Deyvid</span>
         </p>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 md:gap-3">
         {/* Painel de Notificações */}
         <div className="relative">
           <button 
             onClick={() => { setIsNotifOpen(!isNotifOpen); setIsMenuOpen(false); }}
             className={`p-2.5 rounded-xl transition-all border relative ${
-              isNotifOpen ? 'bg-bg-card border-border-ui text-brand shadow-lg' : 'text-text-secondary border-transparent hover:bg-bg-card/50 hover:text-brand'
+              isNotifOpen ? 'bg-bg-card border-border-ui text-brand shadow-lg' : 'text-text-secondary border-transparent hover:bg-bg-card/50'
             }`}
           >
-            <Bell size={18} />
+            <Bell size={20} />
             {notifications.length > 0 && (
-              <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-bg-main animate-pulse" />
+              <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-bg-main animate-pulse" />
             )}
           </button>
 
           {isNotifOpen && (
             <>
-              <div className="fixed inset-0 z-[-1]" onClick={() => setIsNotifOpen(false)} />
-              <div className="absolute right-0 mt-3 w-80 bg-bg-card border border-border-ui rounded-[2rem] shadow-2xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+              {/* Overlay para fechar ao clicar fora */}
+              <div className="fixed inset-0 z-40 bg-black/5 md:bg-transparent" onClick={() => setIsNotifOpen(false)} />
+              
+              {/* Dropdown de Notificações Responsivo */}
+              <div className="fixed md:absolute top-16 md:top-full right-4 md:right-0 mt-2 w-[calc(100vw-2rem)] md:w-80 bg-bg-card border border-border-ui rounded-[2rem] shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
                 <div className="p-5 border-b border-border-ui/50 flex justify-between items-center bg-bg-main/20">
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-text-primary">Monitor de Ativos</h3>
-                  {notifications.length > 0 && (
-                    <span className="px-2 py-0.5 bg-brand text-white text-[8px] font-black rounded-lg uppercase animate-pulse">
-                      Live
-                    </span>
-                  )}
+                  <button onClick={() => setIsNotifOpen(false)} className="md:hidden text-text-secondary p-1"><X size={16} /></button>
                 </div>
                 
-                <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
+                <div className="max-h-[60vh] md:max-h-[350px] overflow-y-auto custom-scrollbar">
                   {loadingNotifs ? (
                     <div className="p-10 flex justify-center"><Loader2 className="animate-spin text-brand" size={20} /></div>
                   ) : notifications.length > 0 ? (
                     notifications.map((n) => (
                       <div 
                         key={n.id} 
-                        onClick={() => dismissNotification(n.id)}
+                        onClick={() => { dismissNotification(n.id); if(window.innerWidth < 768) setIsNotifOpen(false); }}
                         className="p-4 border-b border-border-ui/30 hover:bg-bg-main/40 transition-colors flex gap-4 relative group cursor-pointer"
                       >
                         <div className="mt-1 p-2 bg-bg-main rounded-lg h-fit border border-border-ui/50">{n.icon}</div>
@@ -146,7 +147,7 @@ const Topbar = () => {
                           <p className="text-[10px] font-black text-text-primary uppercase tracking-tight">{n.title}</p>
                           <p className="text-[11px] text-text-secondary mt-1 leading-relaxed font-medium">{n.desc}</p>
                         </div>
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="opacity-40 hover:opacity-100 transition-opacity">
                           <X size={14} className="text-text-secondary hover:text-red-500" />
                         </div>
                       </div>
@@ -163,27 +164,39 @@ const Topbar = () => {
           )}
         </div>
 
-        {/* Tema e Perfil */}
-        <button onClick={toggleTheme} className="p-2.5 rounded-xl text-text-secondary hover:bg-bg-card hover:text-brand transition-all border border-transparent hover:border-border-ui/50">
-          {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+        {/* Tema */}
+        <button
+          onClick={toggleTheme}
+          className="p-2.5 rounded-xl text-text-secondary hover:bg-bg-card hover:text-brand transition-all border border-transparent"
+        >
+          {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
-        <div className="relative ml-2">
-          <button onClick={() => { setIsMenuOpen(!isMenuOpen); setIsNotifOpen(false); }} className={`flex items-center gap-3 p-1.5 pr-4 rounded-2xl transition-all border ${isMenuOpen ? 'bg-bg-card border-border-ui shadow-sm' : 'hover:bg-bg-card/50 border-transparent'}`}>
-            <div className="w-9 h-9 rounded-xl bg-brand flex items-center justify-center text-white shadow-lg shadow-brand/20 font-black italic">W</div>
-            <ChevronDown size={14} className={`text-text-secondary transition-transform duration-300 ${isMenuOpen ? 'rotate-180' : ''}`} />
+        {/* Perfil */}
+        <div className="relative">
+          <button
+            onClick={() => { setIsMenuOpen(!isMenuOpen); setIsNotifOpen(false); }}
+            className={`flex items-center gap-2 p-1.5 rounded-2xl transition-all border ${isMenuOpen ? 'bg-bg-card border-border-ui shadow-sm' : 'border-transparent'}`}
+          >
+            <div className="w-9 h-9 rounded-xl bg-brand flex items-center justify-center text-white shadow-lg shadow-brand/20 font-black italic">
+              D
+            </div>
+            <ChevronDown
+              size={14}
+              className={`hidden md:block text-text-secondary transition-transform duration-300 ${isMenuOpen ? 'rotate-180' : ''}`}
+            />
           </button>
 
           {isMenuOpen && (
             <>
-              <div className="fixed inset-0 z-[-1]" onClick={() => setIsMenuOpen(false)} />
-              <div className="absolute right-0 mt-3 w-56 bg-bg-card border border-border-ui rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+              <div className="fixed inset-0 z-40 bg-black/5 md:bg-transparent" onClick={() => setIsMenuOpen(false)} />
+              <div className="fixed md:absolute top-16 md:top-full right-4 md:right-0 mt-2 w-64 bg-bg-card border border-border-ui rounded-2xl shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
                 <div className="p-5 border-b border-border-ui/50 bg-bg-main/10">
-                  <p className="text-[9px] font-black text-text-secondary uppercase tracking-widest mb-1">Developer ADS</p>
+                  <p className="text-[9px] font-black text-text-secondary uppercase tracking-widest mb-1">Usuário</p>
                   <p className="text-xs font-bold text-text-primary truncate">Deyvid Wellington</p>
                 </div>
                 <div className="p-2">
-                  <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-500/10 transition-all cursor-pointer">
+                  <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-500/10 transition-all">
                     <LogOut size={16} />
                     <span className="text-[10px] font-black uppercase tracking-widest">Sair</span>
                   </button>

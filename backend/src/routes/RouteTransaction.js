@@ -5,7 +5,7 @@ import {
   updateTransaction, 
   deleteTransaction 
 } from '../controllers/ControlTransaction.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { protect } from '../middleware/AuthMiddleware.js';
 
 const router = express.Router();
 

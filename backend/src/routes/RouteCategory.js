@@ -5,7 +5,7 @@ import {
   updateCategory, // Importe a nova função que criamos no controller
   deleteCategory 
 } from '../controllers/ControlCategory.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { protect } from '../middleware/AuthMiddleware.js';
 
 const router = express.Router();
 

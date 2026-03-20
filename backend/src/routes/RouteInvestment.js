@@ -6,7 +6,7 @@ import {
   deleteInvestment,
   liquidateInvestment // <-- Nova função que vamos garantir no Controller
 } from '../controllers/ControlInvestment.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { protect } from '../middleware/AuthMiddleware.js';
 
 const router = express.Router();
 

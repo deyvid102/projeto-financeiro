@@ -5,7 +5,7 @@ import {
   updateBalance, 
   deleteGoal 
 } from '../controllers/ControlGoal.js';
-import { protect } from '../middleware/authMiddleware.js'; // Padronize o Case do arquivo
+import { protect } from '../middleware/AuthMiddleware.js'; // Padronize o Case do arquivo
 
 const router = express.Router();
 

@@ -1,22 +1,41 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { NavLink } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { navItems } from '../navItems';
 
 const MobileDrawer = ({ isOpen, onClose }) => {
+  // Bloqueia o scroll do body quando o menu está aberto
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
-      <button
-        type="button"
+  // Usamos Portal para garantir que o Drawer fique no topo de tudo no DOM
+  return createPortal(
+    <div className="fixed inset-0 z-[100] md:hidden" role="dialog" aria-modal="true">
+      
+      {/* Backdrop (Fundo escurecido com animação) */}
+      <div
+        className="fixed inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300"
         onClick={onClose}
-        className="fixed inset-0 bg-black/30 backdrop-blur-sm"
-        aria-label="Fechar menu"
+        aria-hidden="true"
       />
 
-      <aside className="absolute left-0 top-0 bottom-0 w-72 max-w-[85vw] bg-bg-card border-r border-border-ui shadow-2xl overflow-y-auto">
-        <div className="p-6 flex items-center justify-between border-b border-border-ui/50">
+      {/* Painel Lateral (Drawer) */}
+      <aside 
+        className="fixed left-0 top-0 bottom-0 w-72 max-w-[85vw] bg-bg-card border-r border-border-ui shadow-2xl overflow-y-auto 
+                   animate-in slide-in-from-left duration-300 ease-out z-[101]"
+      >
+        <div className="sticky top-0 bg-bg-card/80 backdrop-blur-md p-6 flex items-center justify-between border-b border-border-ui/50 z-10">
           <p className="text-[10px] font-black uppercase tracking-widest text-text-secondary">
             Navegação
           </p>
@@ -41,7 +60,7 @@ const MobileDrawer = ({ isOpen, onClose }) => {
                 onClick={onClose}
                 className={({ isActive }) => {
                   const base =
-                    'flex items-center gap-4 px-4 py-3 rounded-2xl border transition-all';
+                    'flex items-center gap-4 px-4 py-3 rounded-2xl border transition-all duration-200';
 
                   const active = 'bg-brand text-white border-brand shadow-lg shadow-brand/20';
                   const inactive =
@@ -59,9 +78,9 @@ const MobileDrawer = ({ isOpen, onClose }) => {
           })}
         </nav>
       </aside>
-    </div>
+    </div>,
+    document.body // Renderiza no final do <body>
   );
 };
 
 export default MobileDrawer;
-

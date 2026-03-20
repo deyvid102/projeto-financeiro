@@ -10,10 +10,8 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      // Isso garante que o "@" aponte exatamente para a pasta src 
-      // independente de onde o Render rodar o comando de build
-      '@': path.resolve(__dirname, 'src'), 
-    },
+  '@': path.resolve(__dirname, './src'), // Garanta que o "./" está ali para indicar "pasta atual"
+},
   },
   // ... resto do seu config (server, proxy, etc)
 })

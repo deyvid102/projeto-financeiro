@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Mail, Lock, LogIn, Eye, EyeOff } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../../services/api';
+// Importação da logo
+import logoImg from '../../../assets/logo.png';
 
 const UserLogin = () => {
   const navigate = useNavigate();
@@ -28,9 +30,16 @@ const UserLogin = () => {
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-bg-main p-4 font-sans">
-      {/* Header com Novo Nome */}
-      <div className="text-center mb-8">
-        <h1 className="text-brand text-5xl font-black mb-1 italic tracking-tighter uppercase">
+      {/* Header com Logo Image */}
+      <div className="text-center mb-8 flex flex-col items-center">
+        <div className="w-20 h-20 mb-4">
+          <img 
+            src={logoImg} 
+            alt="FinanceMAX Logo" 
+            className="w-full h-full object-contain"
+          />
+        </div>
+        <h1 className="text-brand text-4xl font-black mb-1 italic tracking-tighter uppercase">
           Finance <span className="text-text-primary">MAX</span>
         </h1>
         <p className="text-[10px] font-black text-text-secondary uppercase tracking-[0.3em] opacity-70">

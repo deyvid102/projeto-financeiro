@@ -1,6 +1,8 @@
 import React from 'react';
 import { LayoutDashboard, ReceiptText, TrendingUp, WalletMinimal, Target } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+// Importação da logo
+import logoImg from '../../../assets/logo.png'; 
 
 const Sidebar = () => {
   const menuItems = [
@@ -14,9 +16,14 @@ const Sidebar = () => {
   return (
     <aside className="hidden md:flex w-20 h-screen sticky top-0 bg-bg-sidebar border-r border-border-ui flex-col items-center py-8 transition-all duration-300 ease-in-out z-50">
       
+      {/* Área da Logo */}
       <div className="mb-12 flex flex-col items-center">
-        <div className="w-10 h-10 bg-brand rounded-xl flex items-center justify-center shadow-lg shadow-brand/20 animate-pulse-slow">
-          <span className="text-white font-black text-xl">FM</span>
+        <div className="w-12 h-12 flex items-center justify-center overflow-hidden">
+          <img 
+            src={logoImg} 
+            alt="FinanceMAX Logo" 
+            className="w-full h-full object-contain hover:scale-110 transition-transform duration-300"
+          />
         </div>
       </div>
 

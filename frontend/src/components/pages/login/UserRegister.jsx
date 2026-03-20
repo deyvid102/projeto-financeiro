@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { UserPlus, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../../services/api';
+// Importação da logo
+import logoImg from '../../../assets/logo.png';
 
 const UserRegister = () => {
   const navigate = useNavigate();
@@ -22,7 +24,6 @@ const UserRegister = () => {
 
     setLoading(true);
     try {
-      // Enviamos apenas os dados necessários para o backend
       const { name, email, password } = formData;
       await api.post('/users/register', { name, email, password });
       navigate('/login');
@@ -35,9 +36,21 @@ const UserRegister = () => {
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-bg-main p-4 font-sans">
-      <div className="text-center mb-8">
-        <h1 className="text-brand text-5xl font-black mb-1 italic tracking-tighter uppercase">finance <span className="text-text-primary">MAX</span></h1>
-        <p className="text-[10px] font-black text-text-secondary uppercase tracking-[0.3em] opacity-70">Crie sua conta no sistema</p>
+      {/* Header com Logo Image */}
+      <div className="text-center mb-8 flex flex-col items-center">
+        <div className="w-20 h-20 mb-4">
+          <img 
+            src={logoImg} 
+            alt="FinanceMAX Logo" 
+            className="w-full h-full object-contain"
+          />
+        </div>
+        <h1 className="text-brand text-4xl font-black mb-1 italic tracking-tighter uppercase">
+          Finance <span className="text-text-primary">MAX</span>
+        </h1>
+        <p className="text-[10px] font-black text-text-secondary uppercase tracking-[0.3em] opacity-70">
+          Crie sua conta no sistema
+        </p>
       </div>
 
       <div className="bg-bg-card w-full max-w-md p-8 rounded-[2.5rem] shadow-2xl shadow-brand/5 border border-border-ui">

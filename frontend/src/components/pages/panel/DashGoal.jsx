@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Loader2, Plus, Target, PiggyBank, Trash2, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
-import api from '../../../services/api';
+import api from '@/services/api';
 import { useAlert } from '../../../context/AlertContext';
 import ModalConfirm from '../../modals/ModalConfirm';
 import ModalGoal from '../../modals/ModalGoal';

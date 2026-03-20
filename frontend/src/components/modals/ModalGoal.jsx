@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Target, Check, Loader2, PiggyBank, Palette } from 'lucide-react';
-import api from '../../services/api';
+import api from '@/services/api';
 import { useAlert } from '../../context/AlertContext';
 import SelectStyle from '../SelectStyle';
 

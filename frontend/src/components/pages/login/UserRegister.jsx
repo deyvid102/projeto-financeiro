@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { UserPlus, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import api from "../../../services/api.js";
+import api from '@/services/api';
 // Importação da logo
 import logoImg from '../../../assets/logo.png';
 

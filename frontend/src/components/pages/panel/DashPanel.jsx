@@ -7,7 +7,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, ReferenceLine 
 } from 'recharts';
-import api from '../../../services/api';
+import api from '@/services/api';
 
 // Tooltip Personalizada com Glassmorphism Adaptada
 const CustomTooltip = ({ active, payload, label }) => {

@@ -6,7 +6,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   Cell, ReferenceLine, PieChart, Pie, Legend 
 } from 'recharts';
-import api from '../../../services/api';
+import api from '@/services/api';
 
 // TOOLTIP CUSTOMIZADO PARA O GRÁFICO DE PIZZA
 const CustomPieTooltip = ({ active, payload }) => {

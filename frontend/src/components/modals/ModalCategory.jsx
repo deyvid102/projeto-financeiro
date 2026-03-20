@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tag, Plus, Trash2, Loader2, Edit2, Check, X } from "lucide-react";
-import api from "../../services/api"; 
+import api from '@/services/api';
 import { useAlert } from "../../context/AlertContext";
 
 const ModalCategory = ({ isOpen, onClose }) => {

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { FiEdit2, FiTrash2 } from 'react-icons/fi';
 
-import api from "@/services/api";
+import api from '@/services/api';
 import { useAlert } from "@/context/AlertContext";
 
 import ModalConfirm from "@/components/modals/ModalConfirm";

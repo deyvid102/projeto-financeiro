@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../ThemeContext';
 import { useNavigate } from 'react-router-dom';
-import api from '../../../services/api';
+import api from '@/services/api';
 
 const Topbar = ({ onOpenMobileMenu }) => {
   const { isDarkMode, toggleTheme } = useTheme();

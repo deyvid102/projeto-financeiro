@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Loader2, Plus, Trash2, DollarSign, PiggyBank, TrendingUp, Calendar, History, ArrowUpRight } from 'lucide-react';
-import api from '../../../services/api';
+import api from '@/services/api';
 import ModalInvestment from '../../modals/ModalInvestment';
 import ModalConfirm from '../../modals/ModalConfirm';
 import Pagination from '../../Pagination';

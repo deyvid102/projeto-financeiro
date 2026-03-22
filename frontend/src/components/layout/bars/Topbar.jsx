@@ -54,10 +54,11 @@ const Topbar = () => {
         alerts.push({
           id: summaryId,
           title: 'Resumo Disponível',
-          desc: `O relatório de ${lastMonthName} está pronto em Despesas.`,
+          desc: `O relatório de ${lastMonthName} está pronto em Finanças.`,
           icon: <BarChart3 size={14} className="text-brand" />,
           date: new Date(today.getFullYear(), today.getMonth(), 1),
-          action: () => navigate('/despesas')
+          // CORREÇÃO: Verifique se o caminho é exatamente /financeiro ou /despesas no seu Router
+          path: '/financeiro' 
         });
       }
 
@@ -65,7 +66,7 @@ const Topbar = () => {
       transRes.data.filter(t => t.totalInstallments > 0).forEach(rec => {
         const id = `rec-${rec._id}`;
         if (rec.currentInstallment === rec.totalInstallments && !dismissedIds.includes(id)) {
-          alerts.push({ id, title: 'Parcelas Finalizadas', desc: `"${rec.title}" concluída.`, icon: <CheckCircle2 size={14} className="text-emerald-500" />, date: new Date(rec.date) });
+          alerts.push({ id, title: 'Parcelas Finalizadas', desc: `"${rec.title}" concluída.`, icon: <CheckCircle2 size={14} className="text-emerald-500" />, date: new Date(rec.date), path: '/financeiro' });
         }
       });
 
@@ -73,12 +74,8 @@ const Topbar = () => {
       investRes.data.forEach(inv => {
         const end = new Date(inv.endDate);
         const idLiquid = `inv-liquid-${inv._id}`;
-        const idWithdraw = `inv-withdrawn-${inv._id}`;
-
         if (end <= today && !inv.isLiquidated && !dismissedIds.includes(idLiquid)) {
-          alerts.push({ id: idLiquid, title: 'Saque Disponível', desc: `Resgate ${inv.name}`, icon: <Wallet size={14} className="text-amber-500" />, date: end });
-        } else if (inv.status === 'sacado' && !dismissedIds.includes(idWithdraw)) {
-          alerts.push({ id: idWithdraw, title: 'Valor Resgatado', desc: `"${inv.name}" enviado ao saldo.`, icon: <CheckCircle2 size={14} className="text-blue-500" />, date: new Date() });
+          alerts.push({ id: idLiquid, title: 'Saque Disponível', desc: `Resgate ${inv.name}`, icon: <Wallet size={14} className="text-amber-500" />, date: end, path: '/investimentos' });
         }
       });
 
@@ -86,7 +83,7 @@ const Topbar = () => {
       goalsRes.data.forEach(goal => {
         const id = `goal-${goal._id}`;
         if (goal.currentAmount >= goal.targetAmount && !dismissedIds.includes(id)) {
-          alerts.push({ id, title: 'Cofre Lotado!', desc: `Meta "${goal.name}" atingida.`, icon: <Target size={14} className="text-brand" />, date: new Date() });
+          alerts.push({ id, title: 'Cofre Lotado!', desc: `Meta "${goal.name}" atingida.`, icon: <Target size={14} className="text-brand" />, date: new Date(), path: '/caixinhas' });
         }
       });
 
@@ -96,13 +93,27 @@ const Topbar = () => {
     } finally {
       setLoadingNotifs(false);
     }
-  }, [navigate]);
+  }, []);
 
   useEffect(() => {
     fetchSystemAlerts(false);
     const interval = setInterval(() => { fetchSystemAlerts(true); }, 30000);
     return () => clearInterval(interval);
   }, [fetchSystemAlerts]);
+
+  // Função centralizada de clique na notificação
+  const handleNotifClick = (notification) => {
+    // 1. Fecha o menu de notificações primeiro
+    setIsNotifOpen(false);
+    
+    // 2. Remove da lista visual e salva no dismiss
+    dismissNotification(notification.id);
+
+    // 3. Navega se houver um caminho definido
+    if (notification.path) {
+      navigate(notification.path);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -147,11 +158,7 @@ const Topbar = () => {
                     notifications.map((n) => (
                       <div 
                         key={n.id} 
-                        onClick={() => { 
-                          if(n.action) n.action();
-                          dismissNotification(n.id); 
-                          if(window.innerWidth < 768) setIsNotifOpen(false); 
-                        }}
+                        onClick={() => handleNotifClick(n)}
                         className="p-4 border-b border-border-ui/30 hover:bg-bg-main/40 transition-colors flex gap-4 relative group cursor-pointer"
                       >
                         <div className="mt-1 p-2 bg-bg-main rounded-lg h-fit border border-border-ui/50">{n.icon}</div>

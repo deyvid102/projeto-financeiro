@@ -16,6 +16,52 @@ const Topbar = () => {
   const [notifications, setNotifications] = useState([]);
   const [loadingNotifs, setLoadingNotifs] = useState(true);
 
+  // --- LÓGICA DE USUÁRIO ---
+  const [userData, setUserData] = useState(() => {
+    const rawName = localStorage.getItem('user_name');
+    const rawUser = localStorage.getItem('user');
+    let finalName = 'Usuário';
+
+    if (rawName) {
+      finalName = rawName;
+    } else if (rawUser) {
+      try {
+        const parsed = JSON.parse(rawUser);
+        finalName = parsed.name || parsed.username || 'Usuário';
+      } catch (e) { finalName = 'Usuário'; }
+    }
+
+    return {
+      name: finalName,
+      initial: finalName.charAt(0).toUpperCase()
+    };
+  });
+
+  // --- LÓGICA DE NOTIFICAÇÕES (PERSISTENTE) ---
+
+  // 1. Marcar como lidas automaticamente ao abrir o sino
+  const markAllAsRead = useCallback(() => {
+    if (notifications.length === 0) return;
+
+    const dismissedIds = JSON.parse(localStorage.getItem('dismissed_notifications') || '[]');
+    const currentNotifIds = notifications.map(n => n.id);
+    
+    // Filtra apenas as que ainda não estão no localStorage
+    const newDismissed = [...new Set([...dismissedIds, ...currentNotifIds])];
+    
+    localStorage.setItem('dismissed_notifications', JSON.stringify(newDismissed));
+    // Nota: Elas continuam no state 'notifications' até o próximo fetch ou fechar o menu
+    // para não sumirem "na cara" do usuário enquanto ele lê.
+  }, [notifications]);
+
+  // Gatilho para marcar como lido
+  useEffect(() => {
+    if (isNotifOpen) {
+      markAllAsRead();
+    }
+  }, [isNotifOpen, markAllAsRead]);
+
+  // Função para remover manualmente uma notificação
   const dismissNotification = useCallback((id) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
     const dismissed = JSON.parse(localStorage.getItem('dismissed_notifications') || '[]');
@@ -37,53 +83,44 @@ const Topbar = () => {
       const alerts = [];
       const today = new Date();
 
-      // --- NOTIFICAÇÃO DE RESUMO MENSAL ---
+      // Relatório Mensal (ID dinâmico por mês/ano)
       const lastMonthDate = new Date();
       lastMonthDate.setMonth(today.getMonth() - 1);
-      
-      const monthNames = [
-        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-      ];
-      
-      const lastMonthName = monthNames[lastMonthDate.getMonth()];
-      const lastMonthYear = lastMonthDate.getFullYear();
-      const summaryId = `summary-${lastMonthDate.getMonth() + 1}-${lastMonthYear}`;
+      const summaryId = `summary-${lastMonthDate.getMonth() + 1}-${lastMonthDate.getFullYear()}`;
 
       if (!dismissedIds.includes(summaryId)) {
+        const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
         alerts.push({
           id: summaryId,
           title: 'Resumo Disponível',
-          desc: `O relatório de ${lastMonthName} está pronto em Finanças.`,
+          desc: `O relatório de ${monthNames[lastMonthDate.getMonth()]} está pronto.`,
           icon: <BarChart3 size={14} className="text-brand" />,
-          date: new Date(today.getFullYear(), today.getMonth(), 1),
-          // CORREÇÃO: Verifique se o caminho é exatamente /financeiro ou /despesas no seu Router
-          path: '/financeiro' 
+          date: new Date(today.getFullYear(), today.getMonth(), 1)
         });
       }
 
-      // Recorrências
+      // Recorrências Finalizadas
       transRes.data.filter(t => t.totalInstallments > 0).forEach(rec => {
         const id = `rec-${rec._id}`;
         if (rec.currentInstallment === rec.totalInstallments && !dismissedIds.includes(id)) {
-          alerts.push({ id, title: 'Parcelas Finalizadas', desc: `"${rec.title}" concluída.`, icon: <CheckCircle2 size={14} className="text-emerald-500" />, date: new Date(rec.date), path: '/financeiro' });
+          alerts.push({ id, title: 'Parcelas Finalizadas', desc: `"${rec.title}" concluída.`, icon: <CheckCircle2 size={14} className="text-emerald-500" />, date: new Date(rec.date) });
         }
       });
 
-      // Investimentos
+      // Investimentos Vencidos
       investRes.data.forEach(inv => {
         const end = new Date(inv.endDate);
         const idLiquid = `inv-liquid-${inv._id}`;
         if (end <= today && !inv.isLiquidated && !dismissedIds.includes(idLiquid)) {
-          alerts.push({ id: idLiquid, title: 'Saque Disponível', desc: `Resgate ${inv.name}`, icon: <Wallet size={14} className="text-amber-500" />, date: end, path: '/investimentos' });
+          alerts.push({ id: idLiquid, title: 'Saque Disponível', desc: `Resgate ${inv.name}`, icon: <Wallet size={14} className="text-amber-500" />, date: end });
         }
       });
 
-      // Caixinhas
+      // Metas Atingidas
       goalsRes.data.forEach(goal => {
         const id = `goal-${goal._id}`;
         if (goal.currentAmount >= goal.targetAmount && !dismissedIds.includes(id)) {
-          alerts.push({ id, title: 'Cofre Lotado!', desc: `Meta "${goal.name}" atingida.`, icon: <Target size={14} className="text-brand" />, date: new Date(), path: '/caixinhas' });
+          alerts.push({ id, title: 'Cofre Lotado!', desc: `Meta "${goal.name}" atingida.`, icon: <Target size={14} className="text-brand" />, date: new Date() });
         }
       });
 
@@ -97,26 +134,18 @@ const Topbar = () => {
 
   useEffect(() => {
     fetchSystemAlerts(false);
-    const interval = setInterval(() => { fetchSystemAlerts(true); }, 30000);
+    const interval = setInterval(() => { fetchSystemAlerts(true); }, 45000); // 45s para poupar recursos
     return () => clearInterval(interval);
   }, [fetchSystemAlerts]);
 
-  // Função centralizada de clique na notificação
-  const handleNotifClick = (notification) => {
-    // 1. Fecha o menu de notificações primeiro
-    setIsNotifOpen(false);
-    
-    // 2. Remove da lista visual e salva no dismiss
-    dismissNotification(notification.id);
-
-    // 3. Navega se houver um caminho definido
-    if (notification.path) {
-      navigate(notification.path);
-    }
-  };
-
+  // --- LOGOUT SELETIVO (AQUI ESTAVA O PROBLEMA) ---
   const handleLogout = () => {
+    // Removemos apenas dados da SESSÃO. 
+    // NÃO use localStorage.clear() para não perder o histórico de notificações e tema.
     localStorage.removeItem('token');
+    localStorage.removeItem('user_name');
+    localStorage.removeItem('user'); 
+    
     navigate('/login');
   };
 
@@ -124,11 +153,12 @@ const Topbar = () => {
     <header className="h-16 md:h-20 flex items-center justify-between px-4 md:px-8 bg-transparent relative z-50 text-left">
       <div className="flex items-center gap-3">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary">
-          Bem-vindo de volta, <span className="text-brand italic">Deyvid</span>
+          Bem-vindo de volta, <span className="text-brand italic">{userData.name.split(' ')[0]}</span>
         </p>
       </div>
 
       <div className="flex items-center gap-1.5 md:gap-3">
+        {/* Notificações */}
         <div className="relative">
           <button 
             onClick={() => { setIsNotifOpen(!isNotifOpen); setIsMenuOpen(false); }}
@@ -158,19 +188,15 @@ const Topbar = () => {
                     notifications.map((n) => (
                       <div 
                         key={n.id} 
-                        onClick={() => handleNotifClick(n)}
-                        className="p-4 border-b border-border-ui/30 hover:bg-bg-main/40 transition-colors flex gap-4 relative group cursor-pointer"
+                        className="p-4 border-b border-border-ui/30 hover:bg-bg-main/40 transition-colors flex gap-4 relative group"
                       >
-                        <div className="mt-1 p-2 bg-bg-main rounded-lg h-fit border border-border-ui/50">{n.icon}</div>
-                        <div className="flex-1 text-left">
+                        <div className="mt-1 p-2 bg-bg-main rounded-lg h-fit border border-border-ui/50 shrink-0">{n.icon}</div>
+                        <div className="flex-1 text-left min-w-0">
                           <p className="text-[10px] font-black text-text-primary uppercase tracking-tight">{n.title}</p>
-                          <p className="text-[11px] text-text-secondary mt-1 leading-relaxed font-medium">{n.desc}</p>
+                          <p className="text-[11px] text-text-secondary mt-1 leading-relaxed font-medium line-clamp-2">{n.desc}</p>
                         </div>
                         <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            dismissNotification(n.id);
-                          }}
+                          onClick={(e) => { e.stopPropagation(); dismissNotification(n.id); }}
                           className="opacity-40 hover:opacity-100 transition-opacity self-start p-1"
                         >
                           <X size={14} className="text-text-secondary hover:text-red-500" />
@@ -189,19 +215,20 @@ const Topbar = () => {
           )}
         </div>
 
-        <button
-          onClick={toggleTheme}
-          className="p-2.5 rounded-xl text-text-secondary hover:bg-bg-card hover:text-brand transition-all border border-transparent"
-        >
+        {/* Tema */}
+        <button onClick={toggleTheme} className="p-2.5 rounded-xl text-text-secondary hover:bg-bg-card hover:text-brand transition-all border border-transparent">
           {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
+        {/* Menu Usuário */}
         <div className="relative">
           <button
             onClick={() => { setIsMenuOpen(!isMenuOpen); setIsNotifOpen(false); }}
             className={`flex items-center gap-2 p-1.5 rounded-2xl transition-all border ${isMenuOpen ? 'bg-bg-card border-border-ui shadow-sm' : 'border-transparent'}`}
           >
-            <div className="w-9 h-9 rounded-xl bg-brand flex items-center justify-center text-white shadow-lg shadow-brand/20 font-black italic">D</div>
+            <div className="w-9 h-9 rounded-xl bg-brand flex items-center justify-center text-white shadow-lg shadow-brand/20 font-black italic">
+              {userData.initial}
+            </div>
             <ChevronDown size={14} className={`hidden md:block text-text-secondary transition-transform duration-300 ${isMenuOpen ? 'rotate-180' : ''}`} />
           </button>
 
@@ -211,7 +238,7 @@ const Topbar = () => {
               <div className="fixed md:absolute top-16 md:top-full right-4 md:right-0 mt-2 w-64 bg-bg-card border border-border-ui rounded-2xl shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-200 overflow-hidden text-left">
                 <div className="p-5 border-b border-border-ui/50 bg-bg-main/10">
                   <p className="text-[9px] font-black text-text-secondary uppercase tracking-widest mb-1">Usuário</p>
-                  <p className="text-xs font-bold text-text-primary truncate">Deyvid Wellington</p>
+                  <p className="text-xs font-bold text-text-primary truncate">{userData.name}</p>
                 </div>
                 <div className="p-2">
                   <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-500/10 transition-all">

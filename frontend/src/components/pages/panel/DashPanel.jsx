@@ -153,7 +153,7 @@ const DashPanel = () => {
               <Wallet size={12} className="text-brand opacity-70 md:w-3.5 md:h-3.5" />
               <span className="text-[7px] md:text-[10px] text-text-secondary font-black uppercase tracking-widest opacity-60">Saldo Atual</span>
             </div>
-            <h2 className="text-base md:text-3xl font-black text-text-primary italic tracking-tighter truncate">
+            <h2 className={`text-base md:text-3xl font-black italic tracking-tighter truncate ${summary.balance >= 0 ? 'text-blue-500' : 'text-red-500'}`}>
               {summary.balance.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
             </h2>
           </div>

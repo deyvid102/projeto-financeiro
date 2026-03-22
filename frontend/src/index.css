@@ -57,3 +57,8 @@
   border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover { background: #00d1ff; }
+
+@keyframes loading-bar {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}

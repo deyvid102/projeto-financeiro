@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Tag, Plus, ArrowUpCircle, ArrowDownCircle, 
-  Loader2, SlidersHorizontal, ChevronLeft, ChevronRight, 
+  SlidersHorizontal, ChevronLeft, ChevronRight, 
   X, RotateCcw, Calendar, Repeat
 } from 'lucide-react';
 import { FiEdit2, FiTrash2 } from 'react-icons/fi';
@@ -14,6 +14,7 @@ import ModalTransactions from "@/components/modals/ModalTransactions";
 import ModalCategory from "@/components/modals/ModalCategory";
 import ModalRecurrence from "@/components/modals/ModalRecurrence";
 import FilterSidebar from "@/components/FilterSidebar";
+import LoadingState from '@/components/LoadingState'; // Importando o novo componente
 
 const TransactionsPanel = () => {
   const [transactions, setTransactions] = useState([]);
@@ -150,16 +151,11 @@ const TransactionsPanel = () => {
   }, [transactions]);
 
   if (loading && transactions.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-brand">
-        <Loader2 className="animate-spin mb-2" size={40} />
-        <p className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em]">Sincronizando fluxo...</p>
-      </div>
-    );
+    return <LoadingState message="SINCRONIZANDO FLUXO..." />;
   }
 
   return (
-    <div className="w-full animate-in fade-in slide-in-from-bottom-6 duration-700 pb-10 px-4 md:px-0">
+    <div className="w-full pb-10 px-4 md:px-0">
       {/* Header Responsivo */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 mt-4">
         <h1 className="text-3xl md:text-4xl font-black text-text-primary tracking-tighter italic uppercase">
@@ -167,7 +163,7 @@ const TransactionsPanel = () => {
         </h1>
         <button 
           onClick={() => { setTransactionToEdit(null); setIsModalOpen(true); }} 
-          className="w-full md:w-auto bg-brand text-white px-8 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3"
+          className="w-full md:w-auto bg-brand text-white px-8 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg flex items-center justify-center gap-3"
         >
           <Plus size={18} strokeWidth={3} /> Nova Transação
         </button>
@@ -195,7 +191,7 @@ const TransactionsPanel = () => {
 
           <div className="grid grid-cols-3 md:contents gap-2">
             <button onClick={() => setIsCategoryModalOpen(true)} className="flex items-center justify-center gap-2 md:gap-3 p-4 bg-bg-card border border-border-ui rounded-2xl text-[9px] md:text-[10px] font-black uppercase text-text-secondary hover:text-brand transition-all shadow-sm"><Tag size={16} /> <span className="hidden sm:inline">Categorias</span></button>
-            <button onClick={() => setIsModalRecurrenceOpen(true)} className="flex items-center justify-center gap-2 md:gap-3 p-4 bg-bg-card border border-brand/20 rounded-2xl text-[9px] md:text-[10px] font-black uppercase text-brand hover:bg-brand hover:text-white transition-all group shadow-sm"><Repeat size={16} className="group-hover:rotate-180 transition-transform duration-500" /> <span className="hidden sm:inline">Recorrências</span></button>
+            <button onClick={() => setIsModalRecurrenceOpen(true)} className="flex items-center justify-center gap-2 md:gap-3 p-4 bg-bg-card border border-brand/20 rounded-2xl text-[9px] md:text-[10px] font-black uppercase text-brand hover:bg-brand hover:text-white transition-all group shadow-sm"><Repeat size={16} /> <span className="hidden sm:inline">Recorrências</span></button>
             <button onClick={() => setIsFilterSidebarOpen(true)} className={`flex items-center justify-center gap-2 md:gap-3 p-4 rounded-2xl text-[9px] md:text-[10px] font-black uppercase transition-all shadow-sm border ${isFilterSidebarOpen ? 'bg-text-primary text-white border-text-primary' : 'bg-bg-card text-text-secondary border-border-ui hover:border-brand'}`}><SlidersHorizontal size={16} /> <span className="hidden sm:inline">Filtros</span></button>
           </div>
         </div>
@@ -308,7 +304,7 @@ const TransactionRow = ({ t, onEdit, onDelete }) => {
   const total = t.totalInstallments || t.recurrence?.totalInstallments;
 
   return (
-    <tr className="text-sm text-text-primary hover:bg-bg-main/20 transition-all group animate-in slide-in-from-right duration-500">
+    <tr className="text-sm text-text-primary hover:bg-bg-main/20 transition-all group">
       <td className="px-8 py-6 text-center">
         <div className={`flex items-center justify-center w-9 h-9 mx-auto rounded-full ${t.type === 'entrada' ? 'text-green-500 bg-green-500/10' : 'text-red-500 bg-red-500/10'}`}>
           {t.type === 'entrada' ? <ArrowUpCircle size={22} strokeWidth={3} /> : <ArrowDownCircle size={22} strokeWidth={3} />}
@@ -340,10 +336,10 @@ const TransactionRow = ({ t, onEdit, onDelete }) => {
       </td>
       <td className="px-8 py-6 text-center">
         <div className="flex justify-center gap-2">
-          <button onClick={() => onEdit(t)} className="p-3 bg-bg-main rounded-xl transition-all active:scale-90 hover:bg-brand hover:text-white text-text-secondary">
+          <button onClick={() => onEdit(t)} className="p-3 bg-bg-main rounded-xl transition-all hover:bg-brand hover:text-white text-text-secondary">
             <FiEdit2 size={14} />
           </button>
-          <button onClick={() => onDelete(t)} className="p-3 bg-bg-main rounded-xl transition-all active:scale-90 hover:bg-red-500 hover:text-white text-text-secondary">
+          <button onClick={() => onDelete(t)} className="p-3 bg-bg-main rounded-xl transition-all hover:bg-red-500 hover:text-white text-text-secondary">
             <FiTrash2 size={14} />
           </button>
         </div>

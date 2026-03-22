@@ -81,7 +81,7 @@ const ModalGoal = ({ isOpen, onClose, onRefresh }) => {
         <div className="flex justify-between items-center p-8 border-b border-border-ui/50">
           <div className="text-left">
             <h2 className="text-2xl font-black text-text-primary italic uppercase tracking-tighter">
-              Novo Cofre <span className="text-brand">MAX</span>
+              Novo Cofre
             </h2>
             <p className="text-[10px] text-text-secondary font-black uppercase tracking-[0.2em] mt-1 opacity-60">Configuração de Objetivo</p>
           </div>

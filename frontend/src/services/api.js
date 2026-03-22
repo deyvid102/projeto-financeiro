@@ -1,8 +1,9 @@
 import axios from 'axios';
 
-// Definimos a URL do backend: se estiver em produção, usa a URL do Render, 
-// se for local, usa o proxy do Vite (/api)
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+// Adicione o /api no final da URL do Render
+const RENDER_URL = 'https://projeto-financeiro-a705.onrender.com/api';
+
+const API_URL = import.meta.env.VITE_API_URL || RENDER_URL;
 
 const api = axios.create({
   baseURL: API_URL,

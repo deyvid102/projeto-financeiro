@@ -1,6 +1,6 @@
 import express from 'express';
 import { registerUser, authUser, updateUserProfile } from '../controllers/ControlUser.js';
-import { protect } from '../middleware/authMiddleware.js'; // Certifique-se de ter este middleware
+import { protect } from '../middleware/AuthMiddleware.js'; // Certifique-se de ter este middleware
 
 const router = express.Router();
 

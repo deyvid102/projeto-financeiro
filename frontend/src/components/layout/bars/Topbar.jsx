@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Sun, Moon, LogOut, ChevronDown, Bell,
   CheckCircle2, Target, CircleAlert, Loader2, Wallet, X, BarChart3,
-  Settings, TrendingUp 
+  Settings, TrendingUp, Info
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeContext';
 import { useNavigate } from 'react-router-dom';
@@ -46,6 +46,10 @@ const Topbar = () => {
     const currentNotifIds = notifications.map(n => n.id);
     const newDismissed = [...new Set([...dismissedIds, ...currentNotifIds])];
     localStorage.setItem('dismissed_notifications', JSON.stringify(newDismissed));
+    
+    if (notifications.some(n => n.id === 'update-beta-investments')) {
+      localStorage.setItem('seen_update_version', '1.0.0-beta');
+    }
   }, [notifications]);
 
   useEffect(() => {
@@ -54,6 +58,11 @@ const Topbar = () => {
 
   const dismissNotification = useCallback((id) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
+    
+    if (id === 'update-beta-investments') {
+      localStorage.setItem('seen_update_version', '1.0.0-beta');
+    }
+
     const dismissed = JSON.parse(localStorage.getItem('dismissed_notifications') || '[]');
     if (!dismissed.includes(id)) {
       localStorage.setItem('dismissed_notifications', JSON.stringify([...dismissed, id]));
@@ -73,7 +82,19 @@ const Topbar = () => {
       const alerts = [];
       const today = new Date();
 
-      // 1. Resumo Mensal (Mantido)
+      const currentUpdateVersion = '1.0.0-beta';
+      const hasSeenUpdate = localStorage.getItem('seen_update_version') === currentUpdateVersion;
+      
+      if (!hasSeenUpdate) {
+        alerts.push({
+          id: 'update-beta-investments',
+          title: 'Nota de Atualização',
+          desc: 'Foram feitas modificações nos investimentos (ainda em fase de testes). Qualquer problema, reporte ao admin para ajustes.',
+          icon: <Info size={14} className="text-brand animate-pulse" />,
+          date: new Date()
+        });
+      }
+
       const lastMonthDate = new Date();
       lastMonthDate.setMonth(today.getMonth() - 1);
       const summaryId = `summary-${lastMonthDate.getMonth() + 1}-${lastMonthDate.getFullYear()}`;
@@ -88,7 +109,6 @@ const Topbar = () => {
         });
       }
 
-      // 2. Parcelas Finalizadas (Mantido)
       transRes.data.filter(t => t.totalInstallments > 0).forEach(rec => {
         const id = `rec-${rec._id}`;
         if (rec.currentInstallment === rec.totalInstallments && !dismissedIds.includes(id)) {
@@ -96,23 +116,19 @@ const Topbar = () => {
         }
       });
 
-      // 3. Lógica de Investimentos (Alta >= 5% e Vencimento)
       investRes.data.forEach(inv => {
         const idLiquid = `inv-liquid-${inv._id}`;
         const idProfit = `inv-profit-${inv._id}`;
 
-        // Alerta de Vencimento
         const end = new Date(inv.endDate);
         if (inv.endDate && end <= today && !inv.isLiquidated && !dismissedIds.includes(idLiquid)) {
           alerts.push({ id: idLiquid, title: 'Saque Disponível', desc: `Resgate ${inv.name}`, icon: <Wallet size={14} className="text-amber-500" />, date: end });
         }
 
-        // --- ALERTA DE ALTA (MÍNIMO 5%) ---
         if (inv.type !== 'renda fixa' && inv.currentPrice > 0 && inv.amountInvested > 0) {
           const currentValue = inv.currentPrice * (inv.quantity || 0);
           const profitPercent = ((currentValue - inv.amountInvested) / inv.amountInvested) * 100;
           
-          // Só notifica se a alta for igual ou superior a 5%
           if (profitPercent >= 5 && !dismissedIds.includes(idProfit)) {
             alerts.push({ 
               id: idProfit, 
@@ -125,7 +141,6 @@ const Topbar = () => {
         }
       });
 
-      // 4. Metas (Mantido)
       goalsRes.data.forEach(goal => {
         const id = `goal-${goal._id}`;
         if (goal.currentAmount >= goal.targetAmount && !dismissedIds.includes(id)) {
@@ -195,7 +210,10 @@ const Topbar = () => {
                         <div className="mt-1 p-2 bg-bg-main rounded-lg h-fit border border-border-ui/50 shrink-0">{n.icon}</div>
                         <div className="flex-1 text-left min-w-0">
                           <p className="text-[10px] font-black text-text-primary uppercase tracking-tight">{n.title}</p>
-                          <p className="text-[11px] text-text-secondary mt-1 leading-relaxed font-medium line-clamp-2">{n.desc}</p>
+                          {/* REMOVIDO line-clamp-2 PARA MOSTRAR TEXTO INTEIRO */}
+                          <p className="text-[11px] text-text-secondary mt-1 leading-relaxed font-medium">
+                            {n.desc}
+                          </p>
                         </div>
                         <button 
                           onClick={(e) => { e.stopPropagation(); dismissNotification(n.id); }}

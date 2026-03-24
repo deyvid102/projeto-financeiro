@@ -4,21 +4,35 @@ import {
   getInvestments, 
   updateInvestmentValue, 
   deleteInvestment,
-  liquidateInvestment // <-- Nova função que vamos garantir no Controller
+  liquidateInvestment 
 } from '../controllers/ControlInvestment.js';
 import { protect } from '../middleware/AuthMiddleware.js';
 
 const router = express.Router();
 
+/**
+ * @desc Todas as rotas de investimento exigem autenticação
+ */
+router.use(protect); 
+
+// --- ROTAS GERAIS ---
+// POST: Cria investimento (processa ticker, quantity, etc)
+// GET: Lista investimentos (calcula valores em tempo real via API/Datas)
 router.route('/')
-  .post(protect, createInvestment)
-  .get(protect, getInvestments);
+  .post(createInvestment)
+  .get(getInvestments);
 
+// --- ROTAS DE AÇÕES ESPECÍFICAS ---
 router.route('/:id')
-  .put(protect, updateInvestmentValue)
-  .delete(protect, deleteInvestment);
+  .put(updateInvestmentValue)
+  .delete(deleteInvestment);
 
-// Rota específica para finalizar o investimento e gerar a entrada opcional
-router.put('/:id/liquidate', protect, liquidateInvestment);
+/**
+ * @route   PUT /api/investments/:id/liquidate
+ * @desc    Finaliza o ativo (venda/resgate) e gera transação de entrada automática.
+ * @access  Private
+ * @payload { addAsIncome: boolean, sellPrice: number }
+ */
+router.put('/:id/liquidate', liquidateInvestment);
 
 export default router;

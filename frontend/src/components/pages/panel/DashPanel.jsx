@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Wallet, ArrowUpCircle, ArrowDownCircle, 
-  Calendar, TrendingUp, PieChart as PieIcon, BarChart3, ChevronRight 
+  Calendar, TrendingUp, PieChart as PieIcon, BarChart3 
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, ReferenceLine 
 } from 'recharts';
 import api from '@/services/api';
-import LoadingState from '@/components/LoadingState'; // Importando o novo componente
+import LoadingState from '@/components/LoadingState'; 
 
 // Tooltip Personalizada
 const CustomTooltip = ({ active, payload, label }) => {
@@ -44,25 +44,6 @@ const DashPanel = () => {
   const [loading, setLoading] = useState(true);
   const [timeFilter, setTimeFilter] = useState('anual');
 
-  const getValorAtual = useCallback((inv) => {
-    const amountInvested = Number(inv.amountInvested) || 0;
-    if (inv.status === 'sacado') return inv.finalValue || amountInvested;
-    const isCrypto = inv.type?.toLowerCase() === 'criptomoedas' || inv.type?.toLowerCase() === 'cripto';
-    if (isCrypto) return amountInvested; 
-    
-    const profitPercent = (Number(inv.expectedProfitability) || 0) / 100;
-    const start = new Date(inv.startDate);
-    const end = new Date(inv.endDate);
-    const today = new Date();
-    if (isNaN(start) || isNaN(end)) return amountInvested;
-
-    const totalMonths = Math.max(1, (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()));
-    const monthsPassed = (today.getFullYear() - start.getFullYear()) * 12 + (today.getMonth() - start.getMonth());
-    const effectiveMonths = Math.min(Math.max(0, monthsPassed), totalMonths);
-    const monthlyRate = Math.pow(1 + profitPercent, 1 / totalMonths) - 1;
-    return Number((amountInvested * Math.pow(1 + monthlyRate, effectiveMonths)).toFixed(2));
-  }, []);
-
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -76,9 +57,15 @@ const DashPanel = () => {
         setTransactions([...transData].sort((a, b) => new Date(b.date) - new Date(a.date)));
         setInvestments(invData);
         
+        // Fluxo de caixa
         const income = transData.filter(t => t.type === 'entrada').reduce((acc, curr) => acc + Number(curr.amount), 0);
         const expense = transData.filter(t => t.type === 'saida').reduce((acc, curr) => acc + Number(curr.amount), 0);
-        const profit = invData.reduce((acc, inv) => acc + (getValorAtual(inv) - (Number(inv.amountInvested) || 0)), 0);
+        
+        // Lucro baseado APENAS em investimentos "em andamento" usando o valor da API
+        const ativos = invData.filter(inv => inv.status === 'em andamento');
+        const totalInvestido = ativos.reduce((acc, inv) => acc + (Number(inv.amountInvested) || 0), 0);
+        const totalAtual = ativos.reduce((acc, inv) => acc + (Number(inv.currentTotalValue) || 0), 0);
+        const profit = totalAtual - totalInvestido;
 
         setSummary({ income, expense, balance: income - expense, totalProfit: profit });
       } catch (err) {
@@ -88,7 +75,7 @@ const DashPanel = () => {
       }
     };
     fetchData();
-  }, [getValorAtual]);
+  }, []);
 
   const timeChartsData = useMemo(() => {
     const now = new Date();
@@ -130,16 +117,19 @@ const DashPanel = () => {
     return Object.entries(categories).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [transactions]);
 
+  // Alocação de ativos SOMENTE para status "em andamento"
   const activeInvestmentsData = useMemo(() => {
     return investments
-      .filter(inv => inv.status !== 'sacado')
-      .map(inv => ({ name: inv.name, value: getValorAtual(inv) }))
+      .filter(inv => inv.status === 'em andamento')
+      .map(inv => ({ 
+        name: inv.ticker || inv.name, 
+        value: Number(inv.currentTotalValue) || Number(inv.amountInvested) || 0 
+      }))
       .sort((a, b) => b.value - a.value);
-  }, [investments, getValorAtual]);
+  }, [investments]);
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
-  // Chamada do Componente Padrão
   if (loading) return <LoadingState />;
 
   return (
@@ -184,7 +174,7 @@ const DashPanel = () => {
               <span className="text-[7px] md:text-[10px] text-text-secondary font-black uppercase tracking-widest opacity-60">Lucro Invest.</span>
             </div>
             <h2 className="text-base md:text-2xl font-black text-brand italic tracking-tighter truncate">
-              +{summary.totalProfit.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
+              {summary.totalProfit > 0 ? '+' : ''}{summary.totalProfit.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
             </h2>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import express from 'express';
-import { registerUser, authUser } from '../controllers/ControlUser.js';
+import { registerUser, authUser, updateUserProfile } from '../controllers/ControlUser.js';
+import { protect } from '../middleware/authMiddleware.js'; // Certifique-se de ter este middleware
 
 const router = express.Router();
 
@@ -8,5 +9,9 @@ router.post('/register', registerUser);
 
 // Rota: POST /api/users/login
 router.post('/login', authUser);
+
+// Rota: PUT /api/users/profile (Acessível apenas com Token)
+// O ModalSettings deve disparar um api.put('/users/profile', dados)
+router.put('/profile', protect, updateUserProfile);
 
 export default router;

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Adicione o /api no final da URL do Render
-const RENDER_URL = 'https://projeto-financeiro-a705.onrender.com/api';
+const RENDER_URL = 'http://localhost:5000/api';
 
 const API_URL = import.meta.env.VITE_API_URL || RENDER_URL;
 

@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Sun, Moon, LogOut, ChevronDown, Bell,
-  CheckCircle2, Target, CircleAlert, Loader2, Wallet, X, BarChart3 
+  CheckCircle2, Target, CircleAlert, Loader2, Wallet, X, BarChart3,
+  Settings, TrendingUp 
 } from 'lucide-react';
-import { useTheme } from '../../ThemeContext';
+import { useTheme } from '@/components/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import api from '@/services/api';
+
+import ModalSettings from '@/components/modals/ModalSettings'; 
 
 const Topbar = () => {
   const { isDarkMode, toggleTheme } = useTheme();
@@ -13,10 +16,10 @@ const Topbar = () => {
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false); 
   const [notifications, setNotifications] = useState([]);
   const [loadingNotifs, setLoadingNotifs] = useState(true);
 
-  // --- LÓGICA DE USUÁRIO ---
   const [userData, setUserData] = useState(() => {
     const rawName = localStorage.getItem('user_name');
     const rawUser = localStorage.getItem('user');
@@ -37,31 +40,18 @@ const Topbar = () => {
     };
   });
 
-  // --- LÓGICA DE NOTIFICAÇÕES (PERSISTENTE) ---
-
-  // 1. Marcar como lidas automaticamente ao abrir o sino
   const markAllAsRead = useCallback(() => {
     if (notifications.length === 0) return;
-
     const dismissedIds = JSON.parse(localStorage.getItem('dismissed_notifications') || '[]');
     const currentNotifIds = notifications.map(n => n.id);
-    
-    // Filtra apenas as que ainda não estão no localStorage
     const newDismissed = [...new Set([...dismissedIds, ...currentNotifIds])];
-    
     localStorage.setItem('dismissed_notifications', JSON.stringify(newDismissed));
-    // Nota: Elas continuam no state 'notifications' até o próximo fetch ou fechar o menu
-    // para não sumirem "na cara" do usuário enquanto ele lê.
   }, [notifications]);
 
-  // Gatilho para marcar como lido
   useEffect(() => {
-    if (isNotifOpen) {
-      markAllAsRead();
-    }
+    if (isNotifOpen) markAllAsRead();
   }, [isNotifOpen, markAllAsRead]);
 
-  // Função para remover manualmente uma notificação
   const dismissNotification = useCallback((id) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
     const dismissed = JSON.parse(localStorage.getItem('dismissed_notifications') || '[]');
@@ -83,11 +73,10 @@ const Topbar = () => {
       const alerts = [];
       const today = new Date();
 
-      // Relatório Mensal (ID dinâmico por mês/ano)
+      // 1. Resumo Mensal (Mantido)
       const lastMonthDate = new Date();
       lastMonthDate.setMonth(today.getMonth() - 1);
       const summaryId = `summary-${lastMonthDate.getMonth() + 1}-${lastMonthDate.getFullYear()}`;
-
       if (!dismissedIds.includes(summaryId)) {
         const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
         alerts.push({
@@ -99,7 +88,7 @@ const Topbar = () => {
         });
       }
 
-      // Recorrências Finalizadas
+      // 2. Parcelas Finalizadas (Mantido)
       transRes.data.filter(t => t.totalInstallments > 0).forEach(rec => {
         const id = `rec-${rec._id}`;
         if (rec.currentInstallment === rec.totalInstallments && !dismissedIds.includes(id)) {
@@ -107,16 +96,36 @@ const Topbar = () => {
         }
       });
 
-      // Investimentos Vencidos
+      // 3. Lógica de Investimentos (Alta >= 5% e Vencimento)
       investRes.data.forEach(inv => {
-        const end = new Date(inv.endDate);
         const idLiquid = `inv-liquid-${inv._id}`;
-        if (end <= today && !inv.isLiquidated && !dismissedIds.includes(idLiquid)) {
+        const idProfit = `inv-profit-${inv._id}`;
+
+        // Alerta de Vencimento
+        const end = new Date(inv.endDate);
+        if (inv.endDate && end <= today && !inv.isLiquidated && !dismissedIds.includes(idLiquid)) {
           alerts.push({ id: idLiquid, title: 'Saque Disponível', desc: `Resgate ${inv.name}`, icon: <Wallet size={14} className="text-amber-500" />, date: end });
+        }
+
+        // --- ALERTA DE ALTA (MÍNIMO 5%) ---
+        if (inv.type !== 'renda fixa' && inv.currentPrice > 0 && inv.amountInvested > 0) {
+          const currentValue = inv.currentPrice * (inv.quantity || 0);
+          const profitPercent = ((currentValue - inv.amountInvested) / inv.amountInvested) * 100;
+          
+          // Só notifica se a alta for igual ou superior a 5%
+          if (profitPercent >= 5 && !dismissedIds.includes(idProfit)) {
+            alerts.push({ 
+              id: idProfit, 
+              title: 'Ativo em Alta', 
+              desc: `${inv.ticker || inv.name} valorizou ${profitPercent.toFixed(1)}%!`, 
+              icon: <TrendingUp size={14} className="text-emerald-500" />, 
+              date: new Date() 
+            });
+          }
         }
       });
 
-      // Metas Atingidas
+      // 4. Metas (Mantido)
       goalsRes.data.forEach(goal => {
         const id = `goal-${goal._id}`;
         if (goal.currentAmount >= goal.targetAmount && !dismissedIds.includes(id)) {
@@ -134,18 +143,12 @@ const Topbar = () => {
 
   useEffect(() => {
     fetchSystemAlerts(false);
-    const interval = setInterval(() => { fetchSystemAlerts(true); }, 45000); // 45s para poupar recursos
+    const interval = setInterval(() => { fetchSystemAlerts(true); }, 45000);
     return () => clearInterval(interval);
   }, [fetchSystemAlerts]);
 
-  // --- LOGOUT SELETIVO (AQUI ESTAVA O PROBLEMA) ---
   const handleLogout = () => {
-    // Removemos apenas dados da SESSÃO. 
-    // NÃO use localStorage.clear() para não perder o histórico de notificações e tema.
-    localStorage.removeItem('token');
-    localStorage.removeItem('user_name');
-    localStorage.removeItem('user'); 
-    
+    localStorage.clear();
     navigate('/login');
   };
 
@@ -158,7 +161,6 @@ const Topbar = () => {
       </div>
 
       <div className="flex items-center gap-1.5 md:gap-3">
-        {/* Notificações */}
         <div className="relative">
           <button 
             onClick={() => { setIsNotifOpen(!isNotifOpen); setIsMenuOpen(false); }}
@@ -215,12 +217,10 @@ const Topbar = () => {
           )}
         </div>
 
-        {/* Tema */}
         <button onClick={toggleTheme} className="p-2.5 rounded-xl text-text-secondary hover:bg-bg-card hover:text-brand transition-all border border-transparent">
           {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
-        {/* Menu Usuário */}
         <div className="relative">
           <button
             onClick={() => { setIsMenuOpen(!isMenuOpen); setIsNotifOpen(false); }}
@@ -240,7 +240,15 @@ const Topbar = () => {
                   <p className="text-[9px] font-black text-text-secondary uppercase tracking-widest mb-1">Usuário</p>
                   <p className="text-xs font-bold text-text-primary truncate">{userData.name}</p>
                 </div>
-                <div className="p-2">
+                <div className="p-2 space-y-1">
+                  <button 
+                    onClick={() => { setIsSettingsOpen(true); setIsMenuOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:bg-bg-main/60 hover:text-brand transition-all group"
+                  >
+                    <Settings size={16} className="group-hover:rotate-45 transition-transform duration-300" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Configurações</span>
+                  </button>
+
                   <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-500/10 transition-all">
                     <LogOut size={16} />
                     <span className="text-[10px] font-black uppercase tracking-widest">Sair</span>
@@ -251,6 +259,8 @@ const Topbar = () => {
           )}
         </div>
       </div>
+
+      <ModalSettings isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </header>
   );
 };

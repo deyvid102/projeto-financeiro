@@ -22,7 +22,6 @@ const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToE
     return Number(presetData.currentAmount || 0);
   };
 
-  // Cores dinâmicas baseadas no tipo (Red para Saída, Green para Entrada)
   const isExpense = formData.type === 'saida';
   const themeColor = isExpense ? 'red-600' : 'green-600';
   const themeBorder = isExpense ? 'focus:border-red-600' : 'focus:border-green-600';
@@ -94,8 +93,6 @@ const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToE
       <div className="absolute inset-0" onClick={onClose} />
       
       <div className="relative w-full max-w-md animate-in zoom-in-95 duration-200">
-        
-        {/* CORPO DO MODAL - SEM overflow-hidden para o Select respirar */}
         <div className="bg-bg-card rounded-[2.5rem] shadow-2xl border border-border-ui relative">
           
           <div className="flex justify-between items-center p-6 border-b border-border-ui/50 bg-bg-main/20 rounded-t-[2.5rem]">
@@ -109,7 +106,6 @@ const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToE
 
           <form onSubmit={handleSubmit} className="p-6 space-y-5">
             
-            {/* SELECT TABS INTERNO */}
             {!presetData && (
               <div className="flex p-1.5 bg-bg-main rounded-2xl border border-border-ui gap-1.5">
                 <button
@@ -159,6 +155,18 @@ const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToE
               </div>
             </div>
 
+            {/* CATEGORIA MOVIDA PARA CIMA */}
+            <div className={`relative z-[100] ${presetData ? 'opacity-50 pointer-events-none' : ''}`}> 
+              <SelectStyle
+                label="Categoria" 
+                icon={Tag} 
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                options={categories} 
+                required
+              />
+            </div>
+
             <div className="space-y-2 text-left">
               <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Descrição</label>
               <div className="relative">
@@ -174,29 +182,15 @@ const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToE
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 relative">
-              {/* Z-INDEX alto para o Select não sumir sob outros elementos */}
-              <div className={`relative z-[100] ${presetData ? 'opacity-50 pointer-events-none' : ''}`}> 
-                <SelectStyle
-                  label="Categoria" 
-                  icon={Tag} 
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  options={categories} 
-                  required
-                />
-              </div>
-
-              <div className="space-y-2 text-left relative z-[10]">
-                <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Data</label>
-                <input
-                  type="date"
-                  className={`w-full px-4 py-4 bg-bg-main border border-border-ui rounded-2xl text-text-primary text-xs font-black outline-none transition-all ${themeBorder}`}
-                  value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                  required
-                />
-              </div>
+            <div className="space-y-2 text-left">
+              <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Data</label>
+              <input
+                type="date"
+                className={`w-full px-4 py-4 bg-bg-main border border-border-ui rounded-2xl text-text-primary text-xs font-black outline-none transition-all ${themeBorder}`}
+                value={formData.date}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                required
+              />
             </div>
 
             <button

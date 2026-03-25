@@ -72,44 +72,55 @@ const ModalSettings = ({ isOpen, onClose }) => {
 
   // --- LÓGICA DE BIOMETRIA (FACEID/DIGITAL) ---
   const handleToggleBiometry = async () => {
-    if (biometryEnabled) {
-      localStorage.setItem('useBiometry', 'false');
-      setBiometryEnabled(false);
-      showAlert("Biometria desativada.", "info");
-      return;
-    }
+  if (biometryEnabled) {
+    localStorage.removeItem('useBiometry');
+    setBiometryEnabled(false);
+    showAlert("Biometria desativada.", "info");
+    return;
+  }
 
-    try {
-      const available = await window.PublicKeyCredential?.isUserVerifyingPlatformAuthenticatorAvailable();
-      
-      if (!available) {
-        showAlert("Seu dispositivo não suporta biometria.", "error");
-        return;
+  try {
+    // 1. Criar o desafio em formato binário (Obrigatório)
+    const challenge = new Uint8Array(32);
+    window.crypto.getRandomValues(challenge);
+    
+    // 2. Criar um ID de usuário único em formato binário
+    const userId = new TextEncoder().encode(formData.email || 'user_id_123');
+
+    // 3. REGISTRAR A PASSKEY (Isso abre o pop-up nativo para CRIAR a chave)
+    const credential = await navigator.credentials.create({
+      publicKey: {
+        challenge,
+        rp: { 
+          name: "FinanceMAX", 
+          id: window.location.hostname // Importante: deve ser o domínio (ex: financemax.render.com)
+        },
+        user: { 
+          id: userId, 
+          name: formData.email || "usuario@financemax.com", 
+          displayName: formData.name || "Usuário" 
+        },
+        pubKeyCredParams: [{ alg: -7, type: "public-key" }], // ES256
+        authenticatorSelection: {
+          authenticatorAttachment: "platform", // Força o hardware do celular (Digital/FaceID)
+          userVerification: "required",
+          residentKey: "required" // Isso garante que a chave fique salva no aparelho
+        },
+        timeout: 60000
       }
+    });
 
-      // Desafio para o sensor nativo
-      const challenge = new Uint8Array(32);
-      window.crypto.getRandomValues(challenge);
-
-      await navigator.credentials.create({
-        publicKey: {
-          challenge,
-          rp: { name: "FinanceMAX" },
-          user: { id: new Uint8Array(16), name: formData.email, displayName: formData.name },
-          pubKeyCredParams: [{ alg: -7, type: "public-key" }],
-          authenticatorSelection: { userVerification: "required" },
-          timeout: 60000
-        }
-      });
-
+    if (credential) {
       localStorage.setItem('useBiometry', 'true');
       setBiometryEnabled(true);
-      showAlert("Biometria ativada com sucesso!", "success");
-    } catch (err) {
-      console.error(err);
-      showAlert("Falha ao configurar biometria.", "error");
+      showAlert("Aparelho autorizado com sucesso!", "success");
     }
-  };
+
+  } catch (err) {
+    console.error("Erro no registro:", err);
+    showAlert("Falha ao autorizar biometria. Tente novamente.", "error");
+  }
+};
 
   const handleInstallApp = async () => {
     if (deferredPrompt) {

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, User, Shield, Moon, Sun, Save, Loader2, 
-  Lock, Eye, EyeOff, AlertCircle, Smartphone, Download
+  Lock, Eye, EyeOff, AlertCircle, Smartphone, Download, RefreshCw, Share,
+  Fingerprint, CheckCircle2
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeContext';
 import api from '@/services/api';
@@ -13,9 +14,11 @@ const ModalSettings = ({ isOpen, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   
-  // Estado para armazenar o prompt do PWA
+  // Estado para PWA e Biometria
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [biometryEnabled, setBiometryEnabled] = useState(localStorage.getItem('useBiometry') === 'true');
   
   const [alertConfig, setAlertConfig] = useState({ 
     show: false, 
@@ -39,25 +42,25 @@ const ModalSettings = ({ isOpen, onClose }) => {
     }
   });
 
-  // --- LÓGICA COMPLETA PWA ---
+  // --- LÓGICA PWA E DETECÇÃO ---
   useEffect(() => {
+    const isApple = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    setIsIOS(isApple);
+
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      console.log('PWA: Evento beforeinstallprompt capturado.');
     };
 
     const handleAppInstalled = () => {
       setDeferredPrompt(null);
       setIsInstalled(true);
-      console.log('PWA: Aplicativo instalado com sucesso.');
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
-    // Verifica se já está rodando como PWA
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
       setIsInstalled(true);
     }
 
@@ -67,14 +70,66 @@ const ModalSettings = ({ isOpen, onClose }) => {
     };
   }, []);
 
-  const handleInstallApp = async () => {
-    if (!deferredPrompt) return;
+  // --- LÓGICA DE BIOMETRIA (FACEID/DIGITAL) ---
+  const handleToggleBiometry = async () => {
+    if (biometryEnabled) {
+      localStorage.setItem('useBiometry', 'false');
+      setBiometryEnabled(false);
+      showAlert("Biometria desativada.", "info");
+      return;
+    }
 
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    if (outcome === 'accepted') {
-      setDeferredPrompt(null);
+    try {
+      const available = await window.PublicKeyCredential?.isUserVerifyingPlatformAuthenticatorAvailable();
+      
+      if (!available) {
+        showAlert("Seu dispositivo não suporta biometria.", "error");
+        return;
+      }
+
+      // Desafio para o sensor nativo
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+
+      await navigator.credentials.create({
+        publicKey: {
+          challenge,
+          rp: { name: "FinanceMAX" },
+          user: { id: new Uint8Array(16), name: formData.email, displayName: formData.name },
+          pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+          authenticatorSelection: { userVerification: "required" },
+          timeout: 60000
+        }
+      });
+
+      localStorage.setItem('useBiometry', 'true');
+      setBiometryEnabled(true);
+      showAlert("Biometria ativada com sucesso!", "success");
+    } catch (err) {
+      console.error(err);
+      showAlert("Falha ao configurar biometria.", "error");
+    }
+  };
+
+  const handleInstallApp = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') setDeferredPrompt(null);
+    } else if (isIOS) {
+      showAlert("No iPhone: Toque em 'Compartilhar' e 'Adicionar à Tela de Início'", "info");
+    } else {
+      showAlert("Use o menu do navegador para 'Instalar Aplicativo'", "info");
+    }
+  };
+
+  const handleForceUpdate = () => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (let registration of registrations) registration.update();
+        showAlert("Buscando atualizações...", "success");
+        setTimeout(() => window.location.reload(true), 1000);
+      });
     }
   };
 
@@ -142,7 +197,7 @@ const ModalSettings = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black backdrop-blur-xl md:p-4 text-left">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xl md:p-4 text-left">
       
       <AlertStyle 
         show={alertConfig.show} 
@@ -153,7 +208,7 @@ const ModalSettings = ({ isOpen, onClose }) => {
 
       <div className="absolute inset-0 hidden md:block" onClick={onClose} />
       
-      <div className="relative w-full h-full md:h-[620px] md:max-w-2xl bg-bg-card md:rounded-[2.5rem] shadow-2xl border-border-ui overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200">
+      <div className="relative w-full h-full md:h-[650px] md:max-w-2xl bg-bg-card md:rounded-[2.5rem] shadow-2xl border border-border-ui/50 overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200">
         
         {/* HEADER MOBILE */}
         <div className="md:hidden flex items-center justify-between p-6 border-b border-border-ui bg-bg-main/20 shrink-0">
@@ -261,7 +316,7 @@ const ModalSettings = ({ isOpen, onClose }) => {
               {activeTab === 'geral' && (
                 <div className="space-y-4 animate-in slide-in-from-bottom-4 md:slide-in-from-right-4 duration-300">
                   <header>
-                    <h3 className="text-lg font-black text-text-primary italic uppercase tracking-tighter">Personalização</h3>
+                    <h3 className="text-lg font-black text-text-primary italic uppercase tracking-tighter">Personalização e Sistema</h3>
                   </header>
 
                   {/* TEMA */}
@@ -280,36 +335,75 @@ const ModalSettings = ({ isOpen, onClose }) => {
                     </div>
                   </div>
 
+                  {/* BIOMETRIA (NOVO) */}
+                  <div 
+                    onClick={handleToggleBiometry}
+                    className={`flex items-center justify-between p-6 border rounded-3xl cursor-pointer transition-all ${
+                      biometryEnabled ? 'bg-indigo-500/10 border-indigo-500/30' : 'bg-bg-main/40 border-border-ui/50 hover:bg-bg-main/60'
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`p-3 rounded-xl ${biometryEnabled ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30' : 'bg-bg-card text-text-secondary border border-border-ui/50'}`}>
+                        <Fingerprint size={20} />
+                      </div>
+                      <div className="text-left">
+                        <p className={`text-[11px] font-black uppercase tracking-tight ${biometryEnabled ? 'text-indigo-500' : 'text-text-primary'}`}>
+                          Acesso por {isIOS ? 'FaceID' : 'Biometria'}
+                        </p>
+                        <p className="text-[9px] text-text-secondary font-bold uppercase italic leading-tight">Desbloquear app ao abrir</p>
+                      </div>
+                    </div>
+                    {biometryEnabled && <CheckCircle2 size={18} className="text-indigo-500 animate-in zoom-in" />}
+                  </div>
+
                   {/* INSTALAÇÃO PWA */}
-                  {!isInstalled && deferredPrompt && (
-                    <div 
-                      onClick={handleInstallApp}
-                      className="flex items-center justify-between p-6 bg-brand/10 border border-brand/20 rounded-3xl cursor-pointer hover:bg-brand/20 transition-all border-dashed"
+                  <div className="grid grid-cols-1 gap-3">
+                    {!isInstalled && (
+                      <button 
+                        type="button"
+                        onClick={handleInstallApp}
+                        className="flex items-center justify-between p-6 bg-brand/10 border border-brand/20 rounded-3xl cursor-pointer hover:bg-brand/20 transition-all border-dashed"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 rounded-xl bg-brand text-white shadow-lg shadow-brand/30">
+                            <Smartphone size={20} />
+                          </div>
+                          <div className="text-left">
+                            <p className="text-[11px] font-black text-brand uppercase tracking-tight">Instalar Aplicativo</p>
+                            <p className="text-[9px] text-text-secondary font-bold uppercase italic">{isIOS ? "Toque no ícone compartilhar do Safari" : "Acesse pela tela inicial"}</p>
+                          </div>
+                        </div>
+                        {isIOS ? <Share size={18} className="text-brand" /> : <Download size={18} className="text-brand animate-bounce" />}
+                      </button>
+                    )}
+
+                    <button 
+                      type="button"
+                      onClick={handleForceUpdate}
+                      className="flex items-center justify-between p-6 bg-bg-main/40 border border-border-ui/50 rounded-3xl hover:border-brand/30 transition-all group"
                     >
                       <div className="flex items-center gap-4">
-                        <div className="p-3 rounded-xl bg-brand text-white shadow-lg shadow-brand/30">
-                          <Smartphone size={20} />
+                        <div className="p-3 rounded-xl bg-bg-card text-text-primary border border-border-ui/50 group-hover:text-brand transition-colors">
+                          <RefreshCw size={20} />
                         </div>
-                        <div>
-                          <p className="text-[11px] font-black text-brand uppercase tracking-tight">Instalar Aplicativo</p>
-                          <p className="text-[9px] text-text-secondary font-bold uppercase italic">Acesse mais rápido pela tela inicial</p>
+                        <div className="text-left">
+                          <p className="text-[11px] font-black text-text-primary uppercase tracking-tight">Atualizar Versão</p>
+                          <p className="text-[9px] text-text-secondary font-bold uppercase italic">Sincronizar cache e manifesto</p>
                         </div>
                       </div>
-                      <Download size={18} className="text-brand animate-bounce" />
-                    </div>
-                  )}
+                    </button>
 
-                  {isInstalled && (
-                    <div className="p-4 bg-bg-main/20 border border-border-ui/30 rounded-2xl flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                      <p className="text-[9px] font-black text-text-secondary uppercase tracking-widest">Aplicativo já instalado ou em modo Nativo</p>
-                    </div>
-                  )}
+                    {isInstalled && (
+                      <div className="p-4 bg-bg-main/20 border border-border-ui/30 rounded-2xl flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                        <p className="text-[9px] font-black text-text-secondary uppercase tracking-widest text-left">O FinanceMAX está rodando como app nativo.</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* RODAPÉ FIXO */}
             <footer className="p-6 border-t border-border-ui/50 bg-bg-main/10 flex flex-col md:flex-row gap-3 shrink-0">
               <button 
                 type="submit" 
@@ -317,7 +411,7 @@ const ModalSettings = ({ isOpen, onClose }) => {
                 className="order-1 md:order-2 flex-1 md:flex-none px-8 py-4 bg-brand text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-brand/20 flex items-center justify-center gap-2"
               >
                 {loading ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                Salvar Dados
+                Salvar Configurações
               </button>
             </footer>
           </form>

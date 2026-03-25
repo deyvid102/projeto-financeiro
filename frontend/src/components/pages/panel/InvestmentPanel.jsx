@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   Plus, Trash2, DollarSign, TrendingUp, History, ArrowUpRight, 
   ArrowDownRight, Activity, List, Wallet, 
-  ArrowDownCircle, CheckCircle2, Calendar 
+  ArrowDownCircle, CheckCircle2, Calendar, Calculator
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, 
@@ -19,9 +19,10 @@ import { useAlert } from '../../../context/AlertContext';
 
 const InvestmentPanel = () => {
   const [investments, setInvestments] = useState([]);
+  const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [timeFilter, setTimeFilter] = useState('30D'); // '30D' ou '12M'
+  const [timeFilter, setTimeFilter] = useState('30D');
   const { showAlert } = useAlert();
 
   const [isMarketOpen, setIsMarketOpen] = useState(false);
@@ -31,23 +32,30 @@ const InvestmentPanel = () => {
     isOpen: false, title: '', message: '', variant: 'danger', onConfirm: () => { },
   });
 
+  // Estados de Paginação
   const [currentPageAtivos, setCurrentPageAtivos] = useState(1);
+  const [currentPageHistorico, setCurrentPageHistorico] = useState(1);
   const itemsPerPage = 4;
+  const itemsPerPageHistorico = 8; // Histórico costuma ocupar menos espaço, então 8 é um bom número
 
-  const fetchInvestments = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await api.get('/investments');
-      setInvestments(Array.isArray(response.data) ? response.data : []);
+      const [invRes, transRes] = await Promise.all([
+        api.get('/investments'),
+        api.get('/transactions')
+      ]);
+      
+      setInvestments(Array.isArray(invRes.data) ? invRes.data : []);
+      setTransactions(Array.isArray(transRes.data) ? transRes.data : []);
     } catch (err) {
-      setInvestments([]);
-      showAlert('Erro ao carregar investimentos', 'error');
+      showAlert('Erro ao carregar dados do patrimônio', 'error');
     } finally {
       setLoading(false);
     }
   }, [showAlert]);
 
-  useEffect(() => { fetchInvestments(); }, [fetchInvestments]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleSacar = async (inv) => {
     try {
@@ -56,7 +64,7 @@ const InvestmentPanel = () => {
         sellPrice: inv.currentTotalValue
       });
       showAlert(`${inv.ticker || inv.name} liquidado com sucesso!`, 'success');
-      fetchInvestments();
+      fetchData();
     } catch (err) { 
       showAlert('Erro ao processar saque.', 'error'); 
     } finally { 
@@ -68,7 +76,7 @@ const InvestmentPanel = () => {
     try {
       await api.delete(`/investments/${id}`);
       showAlert('Investimento removido!', 'success');
-      fetchInvestments();
+      fetchData();
     } catch (err) { showAlert('Erro ao excluir registro.', 'error'); }
     finally { setConfirmModal(p => ({ ...p, isOpen: false })); }
   };
@@ -86,7 +94,7 @@ const InvestmentPanel = () => {
       setConfirmModal({ 
         isOpen: true, 
         title: 'Excluir Registro', 
-        message: 'Esta ação não pode ser desfeita e não gerará transação de entrada.', 
+        message: 'Esta ação não pode ser desfeita.', 
         variant: 'danger', 
         onConfirm: () => handleDeletar(inv._id) 
       });
@@ -97,40 +105,63 @@ const InvestmentPanel = () => {
     investments.filter(inv => inv.status === 'em andamento'), 
   [investments]);
 
-  const historico = useMemo(() => 
-    investments.filter(inv => inv.status === 'sacado' || inv.status === 'finalizado'), 
-  [investments]);
+  const historicoComValores = useMemo(() => {
+    const finalizados = investments.filter(inv => inv.status === 'sacado' || inv.status === 'finalizado');
+    
+    return finalizados.map(inv => {
+      const dataSaque = new Date(inv.updatedAt).getTime();
+      const transacaoResgate = transactions.find(t => {
+        const dataTransacao = new Date(t.date || t.createdAt).getTime();
+        const diffSegundos = Math.abs(dataSaque - dataTransacao) / 1000;
+        const matchTitulo = t.title.toLowerCase().includes(inv.name.toLowerCase()) || 
+                           (inv.ticker && t.title.toLowerCase().includes(inv.ticker.toLowerCase()));
+        return t.type === 'entrada' && matchTitulo && diffSegundos < 10;
+      });
+
+      const valorSacado = transacaoResgate ? transacaoResgate.amount : (inv.lastPrice || inv.amountInvested);
+      const investido = inv.amountInvested;
+      const lucro = valorSacado - investido;
+
+      return {
+        ...inv,
+        valorSacado,
+        lucro,
+        lucroPercent: investido > 0 ? (lucro / investido) * 100 : 0
+      };
+    }).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  }, [investments, transactions]);
   
+  // Lógica de Paginação Aplicada
+  const paginatedAtivos = useMemo(() => {
+    const start = (currentPageAtivos - 1) * itemsPerPage;
+    return ativos.slice(start, start + itemsPerPage);
+  }, [ativos, currentPageAtivos]);
+
+  const paginatedHistorico = useMemo(() => {
+    const start = (currentPageHistorico - 1) * itemsPerPageHistorico;
+    return historicoComValores.slice(start, start + itemsPerPageHistorico);
+  }, [historicoComValores, currentPageHistorico]);
+
   const totalInvestido = useMemo(() => ativos.reduce((acc, inv) => acc + (Number(inv.amountInvested) || 0), 0), [ativos]);
   const totalAtual = useMemo(() => ativos.reduce((acc, inv) => acc + (Number(inv.currentTotalValue) || 0), 0), [ativos]);
   const rendimentoTotal = totalAtual - totalInvestido;
+  const valorSacadoTotal = useMemo(() => historicoComValores.reduce((acc, inv) => acc + inv.valorSacado, 0), [historicoComValores]);
 
-  const valorSacadoTotal = useMemo(() => 
-    historico.reduce((acc, inv) => acc + Number(inv.sellPrice || inv.amountInvested || 0), 0), 
-  [historico]);
-
-  // LÓGICA DE FILTRO DO GRÁFICO
   const multiSeriesData = useMemo(() => {
-    const labels = timeFilter === '30D' 
-      ? [{ id: 'start', name: 'Valor inicial' }, { id: 'current', name: 'Hoje' }]
-      : [{ id: 'start', name: 'Valor inicial' }, { id: 'current', name: 'Atual' }];
-
+    const labels = [{ id: 'start', name: 'Valor inicial' }, { id: 'current', name: 'Atual' }];
     return labels.map((label) => {
       const dataPoint = { name: label.name };
       ativos.forEach(inv => {
         const key = inv.ticker || inv.name;
-        // Simulando a visão histórica baseada no aporte vs atual para o gráfico de área
-        dataPoint[key] = label.id === 'start' 
-          ? Number(inv.amountInvested || 0) 
-          : Number(inv.currentTotalValue || 0);
+        dataPoint[key] = label.id === 'start' ? Number(inv.amountInvested || 0) : Number(inv.currentTotalValue || 0);
       });
       return dataPoint;
     });
-  }, [ativos, timeFilter]);
+  }, [ativos]);
 
   const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#ef4444'];
 
-  if (loading && investments.length === 0) return <LoadingState message="CONECTANDO ÀS APIs DE MERCADO..." />;
+  if (loading && investments.length === 0) return <LoadingState message="SINCRONIZANDO DADOS..." />;
 
   return (
     <div className="w-full min-h-screen pb-10 px-4 md:px-0 flex flex-col text-left">
@@ -157,11 +188,6 @@ const InvestmentPanel = () => {
           <div className="w-[1px] h-8 bg-border-ui/50 mx-2" />
           <StatCapsule label="Lucro em Carteira" value={rendimentoTotal} icon={<TrendingUp size={12} />} colorClass={rendimentoTotal >= 0 ? 'text-brand' : 'text-red-500'} />
         </div>
-
-        <div className="md:hidden bg-bg-card border border-border-ui rounded-[1.5rem] p-5 shadow-sm space-y-3">
-          <MobileStatItem label="Investido" value={totalInvestido} icon={<Wallet size={12} />} />
-          <MobileStatItem label="Lucro" value={rendimentoTotal} icon={<TrendingUp size={12} />} isProfit={rendimentoTotal >= 0} />
-        </div>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6 items-stretch mb-10">
@@ -172,21 +198,9 @@ const InvestmentPanel = () => {
                    <h3 className="text-[9px] font-black text-text-primary uppercase tracking-[0.2em] italic mb-1">Patrimônio Atualizado</h3>
                    <p className="text-xl md:text-2xl font-black text-text-primary tracking-tighter italic">R$ {totalAtual.toLocaleString('pt-BR')}</p>
                 </div>
-                
-                {/* FILTROS DO GRÁFICO */}
                 <div className="flex bg-bg-main border border-border-ui p-1 rounded-xl">
-                  <button 
-                    onClick={() => setTimeFilter('30D')}
-                    className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all ${timeFilter === '30D' ? 'bg-brand text-white shadow-lg' : 'text-text-secondary opacity-50'}`}
-                  >
-                    30D
-                  </button>
-                  <button 
-                    onClick={() => setTimeFilter('12M')}
-                    className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all ${timeFilter === '12M' ? 'bg-brand text-white shadow-lg' : 'text-text-secondary opacity-50'}`}
-                  >
-                    12M
-                  </button>
+                  <button onClick={() => setTimeFilter('30D')} className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all ${timeFilter === '30D' ? 'bg-brand text-white shadow-lg' : 'text-text-secondary opacity-50'}`}>30D</button>
+                  <button onClick={() => setTimeFilter('12M')} className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all ${timeFilter === '12M' ? 'bg-brand text-white shadow-lg' : 'text-text-secondary opacity-50'}`}>12M</button>
                 </div>
               </div>
               
@@ -195,42 +209,16 @@ const InvestmentPanel = () => {
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={multiSeriesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
-                      <XAxis 
-                        dataKey="name" 
-                        axisLine={false} 
-                        tickLine={false} 
-                        tick={{fill: 'currentColor', fontSize: 8, fontWeight: 900, opacity: 0.5}} 
-                      />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: 'currentColor', fontSize: 8, fontWeight: 900, opacity: 0.5}} />
                       <YAxis hide domain={['auto', 'auto']} />
-                      <RechartsTooltip 
-                        contentStyle={{ 
-                          backgroundColor: 'var(--bg-card)', 
-                          border: '1px solid var(--border-ui)', 
-                          borderRadius: '16px',
-                          fontSize: '10px',
-                          fontWeight: '900',
-                          textTransform: 'uppercase'
-                        }} 
-                      />
+                      <RechartsTooltip contentStyle={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-ui)', borderRadius: '16px', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }} />
                       {ativos.map((inv, index) => (
-                        <Area 
-                          key={inv._id} 
-                          type="monotone" 
-                          dataKey={inv.ticker || inv.name} 
-                          stroke={COLORS[index % COLORS.length]} 
-                          fill={COLORS[index % COLORS.length]}
-                          fillOpacity={0.05} 
-                          strokeWidth={3}
-                          animationDuration={1500}
-                          dot={{ r: 4, strokeWidth: 2, fill: 'var(--bg-card)' }}
-                        />
+                        <Area key={inv._id} type="monotone" dataKey={inv.ticker || inv.name} stroke={COLORS[index % COLORS.length]} fill={COLORS[index % COLORS.length]} fillOpacity={0.05} strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: 'var(--bg-card)' }} />
                       ))}
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full flex items-center justify-center opacity-20 uppercase font-black text-[10px] tracking-widest text-center">
-                    Aguardando dados...
-                  </div>
+                  <div className="h-full flex items-center justify-center opacity-20 uppercase font-black text-[10px] tracking-widest text-center">Aguardando dados...</div>
                 )}
               </div>
           </div>
@@ -242,13 +230,8 @@ const InvestmentPanel = () => {
                 <Activity size={12} className="text-brand" /> Ativos em Tempo Real
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {ativos.slice((currentPageAtivos - 1) * itemsPerPage, currentPageAtivos * itemsPerPage).map((inv) => (
-                  <InvestmentCard 
-                    key={inv._id} 
-                    inv={inv} 
-                    openConfirm={openConfirm} 
-                    onShowChart={() => setSelectedInv(inv)} 
-                  />
+                {paginatedAtivos.map((inv) => (
+                  <InvestmentCard key={inv._id} inv={inv} openConfirm={openConfirm} onShowChart={() => setSelectedInv(inv)} />
                 ))}
                 {ativos.length === 0 && <EmptyState text="Sua carteira está vazia" />}
               </div>
@@ -259,7 +242,7 @@ const InvestmentPanel = () => {
         </div>
       </div>
 
-      {historico.length > 0 && (
+      {historicoComValores.length > 0 && (
         <section className="mt-2">
           <div className="flex items-center gap-3 mb-4">
              <div className="h-px bg-border-ui flex-1" />
@@ -268,26 +251,50 @@ const InvestmentPanel = () => {
              </h3>
              <div className="h-px bg-border-ui flex-1" />
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {historico.map(inv => (
-                <div key={inv._id} className="bg-bg-card border border-border-ui/40 p-4 rounded-2xl relative overflow-hidden group">
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="text-[9px] font-black text-text-primary uppercase italic truncate pr-2">{inv.ticker || inv.name}</span>
-                    <CheckCircle2 size={10} className="text-brand" />
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {paginatedHistorico.map(inv => (
+                  <div key={inv._id} className="bg-bg-card border border-border-ui/40 p-5 rounded-[1.8rem] relative overflow-hidden group hover:border-brand/40 transition-all">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-black text-text-primary uppercase italic truncate pr-2 tracking-tighter">{inv.ticker || inv.name}</span>
+                        <span className="text-[6px] font-bold text-text-secondary uppercase opacity-50">{new Date(inv.updatedAt).toLocaleDateString('pt-BR')}</span>
+                      </div>
+                      <CheckCircle2 size={12} className="text-brand" />
+                    </div>
+
+                    <div className="space-y-2 mb-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[7px] font-black text-text-secondary uppercase opacity-40">Investido</span>
+                        <span className="text-[9px] font-bold text-text-secondary italic">R$ {inv.amountInvested.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between items-center bg-brand/5 p-1.5 rounded-lg">
+                        <span className="text-[7px] font-black text-brand uppercase">Sacado</span>
+                        <span className="text-[11px] font-black text-text-primary italic">R$ {inv.valorSacado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-2 border-t border-border-ui/10">
+                      <span className="text-[7px] font-black text-text-secondary uppercase opacity-40">Resultado</span>
+                      <div className={`text-[9px] font-black italic flex items-center gap-1 ${inv.lucro >= 0 ? 'text-brand' : 'text-red-500'}`}>
+                        {inv.lucro >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+                        {inv.lucro >= 0 ? '+' : ''}{inv.lucro.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ({inv.lucroPercent.toFixed(1)}%)
+                      </div>
+                    </div>
                   </div>
-                  <span className="text-[12px] font-black text-text-primary">
-                    R$ {Number(inv.sellPrice || inv.amountInvested).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </span>
-                  <div className="text-[6px] font-bold text-text-secondary uppercase mt-1 opacity-50">
-                    {new Date(inv.updatedAt).toLocaleDateString('pt-BR')}
-                  </div>
-                </div>
               ))}
+          </div>
+          {/* Paginação do Histórico */}
+          <div className="mt-4 flex justify-center">
+            <Pagination 
+              currentPage={currentPageHistorico} 
+              totalPages={Math.ceil(historicoComValores.length / itemsPerPageHistorico)} 
+              onPageChange={setCurrentPageHistorico} 
+            />
           </div>
         </section>
       )}
 
-      <ModalInvestment isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onRefresh={fetchInvestments} />
+      <ModalInvestment isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onRefresh={fetchData} />
       <ModalConfirm {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, isOpen: false }))} />
       <ModalMarketChart isOpen={isMarketOpen} onClose={() => setIsMarketOpen(false)} />
       <ModalInvestmentDetail isOpen={!!selectedInv} investment={selectedInv} onClose={() => setSelectedInv(null)} />
@@ -295,7 +302,7 @@ const InvestmentPanel = () => {
   );
 };
 
-// COMPONENTES AUXILIARES (Mantidos conforme solicitado)
+// Componentes Auxiliares
 const StatCapsule = ({ label, value, icon, colorClass }) => (
   <div className="flex-1 px-4 py-2 flex flex-col justify-center text-left">
     <div className="flex items-center gap-1.5 mb-0.5 opacity-60 uppercase font-black text-[7px] tracking-[0.15em] text-text-secondary">
@@ -304,18 +311,6 @@ const StatCapsule = ({ label, value, icon, colorClass }) => (
     <p className={`text-lg font-black italic tracking-tighter ${colorClass}`}>
       R$ {Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
     </p>
-  </div>
-);
-
-const MobileStatItem = ({ label, value, icon, isProfit = false }) => (
-  <div className="flex justify-between items-center px-1">
-    <div className="flex items-center gap-2">
-      <div className="p-1.5 bg-white/5 rounded-lg">{icon}</div>
-      <span className="text-[8px] font-black text-text-secondary uppercase tracking-widest">{label}</span>
-    </div>
-    <span className={`text-sm font-black italic ${isProfit ? 'text-brand' : 'text-text-primary'}`}>
-      R$ {Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-    </span>
   </div>
 );
 
@@ -339,46 +334,20 @@ const InvestmentCard = ({ inv, openConfirm, onShowChart }) => {
            <button onClick={() => openConfirm('delete', inv)} className="p-2 bg-red-500/5 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-sm"><Trash2 size={12} strokeWidth={3} /></button>
         </div>
       </div>
-      <div className="flex items-center gap-1.5 mb-3 px-1">
-        <Calendar size={10} className="text-text-secondary opacity-40" />
-        <p className="text-[7px] font-black text-text-secondary uppercase opacity-60 tracking-tighter">
-          Início: <span className="text-text-primary">{new Date(inv.startDate).toLocaleDateString('pt-BR')}</span>
-        </p>
-      </div>
       <div className="grid grid-cols-2 gap-3 mb-4 py-3 border-y border-border-ui/10">
           <div>
             <p className="text-[6px] font-black text-text-secondary uppercase opacity-40 mb-1">Investido</p>
-            <p className="text-[10px] font-bold text-text-primary italic">
-              R$ {valInvestido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </p>
+            <p className="text-[10px] font-bold text-text-primary italic">R$ {valInvestido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
           </div>
           <div className="text-right">
             <p className="text-[6px] font-black text-text-secondary uppercase opacity-40 mb-1">Valor Atual</p>
-            <p className={`text-[10px] font-black italic ${lucroPercent >= 0 ? 'text-brand' : 'text-red-500'}`}>
-              R$ {valAtualTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </p>
+            <p className={`text-[10px] font-black italic ${lucroPercent >= 0 ? 'text-brand' : 'text-red-500'}`}>R$ {valAtualTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
           </div>
       </div>
       <div className="flex justify-between items-end">
         <div className="flex flex-col gap-1">
-          {inv.endDate ? (
-            <>
-              <p className="text-[6px] font-black text-text-secondary uppercase opacity-40">Vencimento</p>
-              <div className="flex items-center gap-1">
-                <Calendar size={8} className="text-brand opacity-60" />
-                <p className="text-[8px] font-bold text-brand italic">{new Date(inv.endDate).toLocaleDateString('pt-BR')}</p>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="text-[6px] font-black text-text-secondary uppercase opacity-40">
-                {isCripto ? 'Sua Fração' : 'Quantidade'}
-              </p>
-              <p className="text-[8px] font-bold text-text-primary/60 italic">
-                {Number(inv.quantity).toFixed(isCripto ? 6 : 2)} {inv.ticker || ''}
-              </p>
-            </>
-          )}
+          <p className="text-[6px] font-black text-text-secondary uppercase opacity-40">{isCripto ? 'Sua Fração' : 'Quantidade'}</p>
+          <p className="text-[8px] font-bold text-text-primary/60 italic">{Number(inv.quantity).toFixed(isCripto ? 6 : 2)} {inv.ticker || ''}</p>
         </div>
         <div className={`px-3 py-1.5 rounded-xl text-[9px] font-black flex items-center gap-1.5 shadow-sm ${lucroPercent >= 0 ? 'bg-brand/10 text-brand' : 'bg-red-500/10 text-red-500'}`}>
            {lucroPercent >= 0 ? <ArrowUpRight size={10} strokeWidth={3}/> : <ArrowDownRight size={10} strokeWidth={3}/>} 

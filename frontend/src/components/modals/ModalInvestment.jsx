@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, DollarSign, TrendingUp, Briefcase, Receipt, Check, Loader2, 
-  BarChart4, Landmark, Bitcoin, PieChart, Calendar 
+  BarChart4, Landmark, Bitcoin, PieChart, Calendar, Calculator
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAlert } from '../../context/AlertContext';
@@ -26,6 +26,35 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
   // Lógica de Visibilidade
   const isFixedIncome = formData.type === 'renda fixa';
   const showVencimento = isFixedIncome || formData.type === 'outros';
+
+  // --- LÓGICA DE SIMULAÇÃO ---
+  const simulation = useMemo(() => {
+    const { amountInvested, expectedProfitability, startDate, endDate } = formData;
+    
+    if (!isFixedIncome || !amountInvested || !expectedProfitability || !endDate) return null;
+
+    const principal = parseFloat(amountInvested);
+    const taxaAnual = parseFloat(expectedProfitability) / 100;
+    const d1 = new Date(startDate);
+    const d2 = new Date(endDate);
+
+    if (d2 <= d1) return null;
+
+    // Cálculo de tempo em anos (base 365 dias)
+    const diffEmMs = d2 - d1;
+    const dias = Math.floor(diffEmMs / (1000 * 60 * 60 * 24));
+    const anos = dias / 365;
+
+    // Juros Compostos: M = P * (1 + i)^t
+    const montanteBruto = principal * Math.pow((1 + taxaAnual), anos);
+    const lucroBruto = montanteBruto - principal;
+
+    return {
+      total: montanteBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+      lucro: lucroBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+      dias: dias
+    };
+  }, [formData, isFixedIncome]);
 
   useEffect(() => {
     const bottomBar = document.querySelector('nav[aria-label="Navegação principal"]');
@@ -64,7 +93,7 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
 
       const dataToSend = {
         ...formData,
-        ticker: isFixedIncome ? '' : formData.ticker, // Garante ticker vazio para renda fixa no envio
+        ticker: isFixedIncome ? '' : formData.ticker,
         amountInvested: Number(formData.amountInvested),
         quantity: 0, 
         startDate: selectedStartDate,
@@ -166,11 +195,6 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
                 placeholder="0,00"
               />
             </div>
-            {!isFixedIncome && (
-              <p className="text-[7px] font-bold text-text-secondary uppercase mt-1 opacity-50 px-2 italic">
-                * A quantidade de cotas será calculada automaticamente com base no valor de mercado hoje.
-              </p>
-            )}
           </div>
 
           {/* Data de Início */}
@@ -211,6 +235,40 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
                   />
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* --- CAMPO DE SIMULAÇÃO ABAIXO DA RENTABILIDADE --- */}
+          {simulation && (
+            <div className="bg-brand/10 border border-brand/20 rounded-[2rem] p-5 space-y-4 animate-in zoom-in-95 duration-300">
+              <div className="flex items-center justify-between border-b border-brand/10 pb-3">
+                <div className="flex items-center gap-2">
+                  <Calculator size={14} className="text-brand" />
+                  <span className="text-[9px] font-black uppercase tracking-widest text-brand italic">Projeção de Retorno</span>
+                </div>
+                <span className="text-[8px] font-bold text-brand bg-brand/10 px-2 py-0.5 rounded-full uppercase italic">
+                  {simulation.dias} dias
+                </span>
+              </div>
+              
+              <div className="flex justify-between items-end">
+                <div className="space-y-1">
+                  <p className="text-[8px] font-black text-text-secondary uppercase opacity-60">Montante Final Bruto</p>
+                  <p className="text-2xl font-black text-text-primary italic tracking-tighter">
+                    {simulation.total.split(',')[0]}<span className="text-sm opacity-60">,{simulation.total.split(',')[1]}</span>
+                  </p>
+                </div>
+                <div className="text-right space-y-1">
+                  <p className="text-[8px] font-black text-text-secondary uppercase opacity-60">Lucro Estimado</p>
+                  <p className="text-sm font-black text-green-500 italic">
+                    +{simulation.lucro}
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-[7px] font-bold text-text-secondary uppercase opacity-40 leading-tight">
+                * Simulação baseada em juros compostos anuais sobre dias corridos. Valores sem considerar impostos.
+              </p>
             </div>
           )}
 

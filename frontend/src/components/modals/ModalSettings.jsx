@@ -13,7 +13,6 @@ const ModalSettings = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState('perfil');
   const [loading, setLoading] = useState(false);
   
-  // Estados para visibilidade de senha
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   
@@ -55,6 +54,7 @@ const ModalSettings = ({ isOpen, onClose }) => {
     const handleAppInstalled = () => {
       setDeferredPrompt(null);
       setIsInstalled(true);
+      showAlert("Aplicativo instalado com sucesso!", "success");
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -74,7 +74,18 @@ const ModalSettings = ({ isOpen, onClose }) => {
     setAlertConfig({ show: true, message, type });
   };
 
-  // --- LÓGICA DE PIN ---
+  const handleInstallApp = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    } else if (isIOS) {
+      showAlert("No iOS, clique em Compartilhar e 'Adicionar à Tela de Início'", "info");
+    }
+  };
+
   const handleTogglePin = () => {
     if (pinEnabled) {
       localStorage.removeItem('usePin');
@@ -149,7 +160,6 @@ const ModalSettings = ({ isOpen, onClose }) => {
 
       <div className="relative w-full h-full md:h-[650px] md:max-w-2xl bg-bg-card md:rounded-[2.5rem] shadow-2xl border border-border-ui/50 overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200">
         
-        {/* BOTÃO X PARA SAIR (DESKTOP) */}
         <button 
           onClick={onClose}
           className="hidden md:flex absolute top-6 right-6 z-50 p-2 bg-bg-main/50 hover:bg-red-500/10 hover:text-red-500 rounded-full transition-all text-text-secondary"
@@ -157,13 +167,11 @@ const ModalSettings = ({ isOpen, onClose }) => {
           <X size={20} />
         </button>
 
-        {/* HEADER MOBILE */}
         <div className="md:hidden flex items-center justify-between p-6 border-b border-border-ui bg-bg-main/20 shrink-0">
           <h2 className="text-sm font-black text-text-primary uppercase italic">Config<span className="text-brand">MAX</span></h2>
           <button onClick={onClose} className="p-2 text-text-secondary"><X size={24} /></button>
         </div>
 
-        {/* ABAS LATERAIS */}
         <div className="w-full md:w-48 bg-bg-main/30 border-r border-border-ui/50 p-4 md:p-6 flex flex-row md:flex-col gap-2 shrink-0">
           <button 
             type="button"
@@ -184,7 +192,6 @@ const ModalSettings = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* CORPO DO MODAL */}
         <div className="flex-1 flex flex-col bg-bg-card overflow-hidden">
           <form onSubmit={handleSave} className="flex-1 flex flex-col overflow-hidden">
             <div className="p-6 md:p-8 flex-1 overflow-y-auto custom-scrollbar">
@@ -208,7 +215,6 @@ const ModalSettings = ({ isOpen, onClose }) => {
 
                     <div className="h-px bg-border-ui/50" />
 
-                    {/* SENHA ATUAL COM OLHINHO */}
                     <div className="space-y-2">
                       <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Senha Atual</label>
                       <div className="relative">
@@ -224,7 +230,6 @@ const ModalSettings = ({ isOpen, onClose }) => {
                       </div>
                     </div>
 
-                    {/* NOVAS SENHAS */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Nova Senha</label>
@@ -260,6 +265,7 @@ const ModalSettings = ({ isOpen, onClose }) => {
                     <h3 className="text-lg font-black text-text-primary italic uppercase tracking-tighter">Sistema</h3>
                   </header>
 
+                  {/* MODO ESCURO */}
                   <div onClick={toggleTheme} className="flex items-center justify-between p-6 bg-bg-main/40 border border-border-ui/50 rounded-3xl cursor-pointer hover:bg-bg-main/60 transition-all">
                     <div className="flex items-center gap-4">
                       <div className={`p-3 rounded-xl ${isDarkMode ? 'bg-indigo-500/10 text-indigo-500' : 'bg-amber-500/10 text-amber-500'}`}>
@@ -272,7 +278,33 @@ const ModalSettings = ({ isOpen, onClose }) => {
                     </div>
                   </div>
 
-                  {/* NOVO PIN SEM DISCAGEM */}
+                  {/* INSTALAÇÃO PWA */}
+                  <div 
+                    onClick={!isInstalled ? handleInstallApp : undefined}
+                    className={`flex items-center justify-between p-6 bg-bg-main/40 border border-border-ui/50 rounded-3xl transition-all ${!isInstalled ? 'cursor-pointer hover:bg-bg-main/60 border-brand/20' : 'opacity-80'}`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`p-3 rounded-xl ${isInstalled ? 'bg-green-500/10 text-green-500' : 'bg-brand/10 text-brand'}`}>
+                        {isInstalled ? <Smartphone size={20} /> : <Download size={20} />}
+                      </div>
+                      <div className="text-left">
+                        <p className="text-[11px] font-black text-text-primary uppercase tracking-tight">
+                          {isInstalled ? "App Instalado" : "Instalar Aplicativo"}
+                        </p>
+                        <p className="text-[9px] text-text-secondary font-bold uppercase italic leading-tight">
+                          {isInstalled ? "Versão Nativa Ativa" : isIOS ? "Adicionar à tela inicial" : "Acesso rápido e offline"}
+                        </p>
+                      </div>
+                    </div>
+                    {!isInstalled && (
+                      <div className="p-2 bg-brand/10 rounded-lg text-brand">
+                        {isIOS ? <Share size={16} /> : <Download size={16} />}
+                      </div>
+                    )}
+                    {isInstalled && <CheckCircle2 size={18} className="text-green-500" />}
+                  </div>
+
+                  {/* PIN */}
                   <div className={`p-6 border rounded-3xl transition-all ${isSettingPin ? 'bg-indigo-500/5 border-indigo-500/30' : 'bg-bg-main/40 border-border-ui/50'}`}>
                     {!isSettingPin ? (
                       <div onClick={handleTogglePin} className="flex items-center justify-between cursor-pointer">
@@ -306,6 +338,7 @@ const ModalSettings = ({ isOpen, onClose }) => {
                     )}
                   </div>
 
+                  {/* ATUALIZAÇÃO */}
                   <button type="button" onClick={handleForceUpdate} className="w-full flex items-center justify-between p-6 bg-bg-main/40 border border-border-ui/50 rounded-3xl hover:border-brand/30 transition-all group">
                     <div className="flex items-center gap-4">
                       <div className="p-3 rounded-xl bg-bg-card text-text-primary border border-border-ui/50 group-hover:text-brand transition-colors"><RefreshCw size={20} /></div>

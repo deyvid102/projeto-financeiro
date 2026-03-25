@@ -21,7 +21,10 @@ const investmentSchema = new mongoose.Schema(
       type: String,
       enum: ['em andamento', 'finalizado', 'sacado'],
       default: 'em andamento' 
-    }
+    },
+
+    lastPrice: { type: Number },
+    lastUpdate: { type: Date }
   },
   { timestamps: true }
 );

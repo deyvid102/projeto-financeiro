@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, User, Shield, Moon, Sun, Save, Loader2, 
-  Lock, Eye, EyeOff, AlertCircle 
+  Lock, Eye, EyeOff, AlertCircle, Smartphone 
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeContext';
 import api from '@/services/api';
@@ -12,6 +12,9 @@ const ModalSettings = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState('perfil');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Estado para armazenar o prompt do PWA
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
   
   const [alertConfig, setAlertConfig] = useState({ 
     show: false, 
@@ -35,20 +38,48 @@ const ModalSettings = ({ isOpen, onClose }) => {
     }
   });
 
+  // --- CAPTURA DO EVENTO PWA ---
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      // Previne o mini-infobar de aparecer no mobile por padrão
+      e.preventDefault();
+      // Salva o evento para ser disparado pelo botão
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (deferredPrompt) {
+      // Mostra o prompt de instalação
+      deferredPrompt.prompt();
+      // Aguarda o usuário responder
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        // Se instalou, limpamos o estado para esconder o botão
+        setDeferredPrompt(null);
+      }
+    }
+  };
+
   // --- TRAVA DE SEGURANÇA PARA ESCONDER A BOTTOM BAR ---
   useEffect(() => {
-    // Busca por classe, ID ou pela própria tag nav com aria-label específico
     const bottomBar = document.querySelector('nav[aria-label="Navegação principal"]');
     
     if (isOpen) {
       document.body.style.overflow = 'hidden';
       if (bottomBar) {
-        bottomBar.style.display = 'none'; // Remove do layout enquanto o modal estiver aberto
+        bottomBar.style.display = 'none';
       }
     } else {
       document.body.style.overflow = 'unset';
       if (bottomBar) {
-        bottomBar.style.display = 'block'; // Retorna ao fechar
+        bottomBar.style.display = 'block';
       }
     }
 
@@ -224,7 +255,7 @@ const ModalSettings = ({ isOpen, onClose }) => {
               )}
 
               {activeTab === 'geral' && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4 md:slide-in-from-right-4 duration-300 text-left">
+                <div className="space-y-4 animate-in slide-in-from-bottom-4 md:slide-in-from-right-4 duration-300 text-left">
                   <div 
                     onClick={toggleTheme}
                     className="flex items-center justify-between p-6 bg-bg-main/40 border border-border-ui/50 rounded-3xl cursor-pointer hover:bg-bg-main/60 transition-all"
@@ -239,13 +270,31 @@ const ModalSettings = ({ isOpen, onClose }) => {
                       <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 ${isDarkMode ? 'left-7' : 'left-1'}`} />
                     </div>
                   </div>
+
+                  {/* NOVO: OPÇÃO DE INSTALAR O APP (APENAS MOBILE E SE O NAVEGADOR PERMITIR) */}
+                  {deferredPrompt && (
+                    <div 
+                      onClick={handleInstallApp}
+                      className="md:hidden flex items-center justify-between p-6 bg-brand/10 border border-brand/20 rounded-3xl cursor-pointer hover:bg-brand/20 transition-all"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="p-3 rounded-xl bg-brand text-white shadow-lg shadow-brand/30">
+                          <Smartphone size={20} />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-black text-brand uppercase tracking-tight">Instalar Aplicativo</p>
+                          <p className="text-[9px] text-text-secondary font-bold">Tenha acesso rápido na tela inicial</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                 </div>
               )}
             </div>
 
             {/* RODAPÉ FIXO */}
             <footer className="p-6 border-t border-border-ui/50 bg-bg-main/10 flex flex-col md:flex-row gap-3 shrink-0">
-              
               <button 
                 type="submit" 
                 disabled={loading} 

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   X, User, Shield, Moon, Sun, Save, Loader2, 
   Lock, Eye, EyeOff, Smartphone, Download, RefreshCw, Share,
@@ -43,6 +44,15 @@ const ModalSettings = ({ isOpen, onClose }) => {
   });
 
   useEffect(() => {
+    if (isOpen) {
+      // LOGS PARA DEBUG NO MOBILE
+      console.log("--- DEBUG MODAL SETTINGS ---");
+      console.log("Window InnerHeight:", window.innerHeight);
+      console.log("Document ClientHeight:", document.documentElement.clientHeight);
+      console.log("Is Standalone (PWA):", window.matchMedia('(display-mode: standalone)').matches);
+      console.log("Is IOS:", /iPad|iPhone|iPod/.test(navigator.userAgent));
+    }
+
     const isApple = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     setIsIOS(isApple);
 
@@ -68,11 +78,15 @@ const ModalSettings = ({ isOpen, onClose }) => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
-  }, []);
+  }, [isOpen]);
 
   const showAlert = (message, type = 'error') => {
     setAlertConfig({ show: true, message, type });
   };
+
+  const handleCloseAlert = useCallback(() => {
+    setAlertConfig(prev => ({ ...prev, show: false, message: '' }));
+  }, []);
 
   const handleInstallApp = async () => {
     if (deferredPrompt) {
@@ -149,16 +163,17 @@ const ModalSettings = ({ isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xl md:p-4 text-left">
+  // Utilizamos o createPortal para jogar a modal diretamente no <body>
+  return createPortal(
+    <div className="fixed inset-0 z-[10000] flex items-end md:items-center justify-center bg-black/60 backdrop-blur-xl md:p-4 text-left">
       <AlertStyle 
-        show={alertConfig.show} 
         type={alertConfig.type} 
-        message={alertConfig.message} 
-        onClose={() => setAlertConfig({ ...alertConfig, show: false })}
+        message={alertConfig.show ? alertConfig.message : ''} 
+        onClose={handleCloseAlert}
       />
 
-      <div className="relative w-full h-full md:h-[650px] md:max-w-2xl bg-bg-card md:rounded-[2.5rem] shadow-2xl border border-border-ui/50 overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200">
+      {/* Ajustado para h-screen e max-h-screen no mobile para evitar overflow invisível */}
+      <div className="relative w-full h-full max-h-[100dvh] md:h-[650px] md:max-h-[650px] md:max-w-2xl bg-bg-card md:rounded-[2.5rem] rounded-t-[2.5rem] shadow-2xl border border-border-ui/50 overflow-hidden flex flex-col md:flex-row animate-in slide-in-from-bottom duration-300">
         
         <button 
           onClick={onClose}
@@ -169,9 +184,10 @@ const ModalSettings = ({ isOpen, onClose }) => {
 
         <div className="md:hidden flex items-center justify-between p-6 border-b border-border-ui bg-bg-main/20 shrink-0">
           <h2 className="text-sm font-black text-text-primary uppercase italic">Config<span className="text-brand">MAX</span></h2>
-          <button onClick={onClose} className="p-2 text-text-secondary"><X size={24} /></button>
+          <button type="button" onClick={onClose} className="p-2 text-text-secondary"><X size={24} /></button>
         </div>
 
+        {/* Sidebar Mobile Navigation */}
         <div className="w-full md:w-48 bg-bg-main/30 border-r border-border-ui/50 p-4 md:p-6 flex flex-row md:flex-col gap-2 shrink-0">
           <button 
             type="button"
@@ -192,177 +208,176 @@ const ModalSettings = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        <div className="flex-1 flex flex-col bg-bg-card overflow-hidden">
-          <form onSubmit={handleSave} className="flex-1 flex flex-col overflow-hidden">
-            <div className="p-6 md:p-8 flex-1 overflow-y-auto custom-scrollbar">
-              
-              {activeTab === 'perfil' && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
-                  <header>
-                    <h3 className="text-lg font-black text-text-primary italic uppercase tracking-tighter">Dados de Acesso</h3>
-                  </header>
+        {/* FORM CONTAINER - Garantindo que ele ocupe o espaço restante */}
+        <form onSubmit={handleSave} className="flex-1 flex flex-col overflow-hidden relative">
+          
+          <div className="flex-1 p-6 md:p-8 overflow-y-auto custom-scrollbar pb-32 md:pb-8">
+            
+            {activeTab === 'perfil' && (
+              <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
+                <header>
+                  <h3 className="text-lg font-black text-text-primary italic uppercase tracking-tighter">Dados de Acesso</h3>
+                </header>
 
-                  <div className="space-y-5">
-                    <div className="space-y-2">
-                      <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Nome Completo</label>
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Nome Completo</label>
+                    <input 
+                      type="text" 
+                      className="w-full px-5 py-4 bg-bg-main border border-border-ui rounded-2xl text-text-primary font-bold outline-none focus:border-brand"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="h-px bg-border-ui/50" />
+
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Senha Atual</label>
+                    <div className="relative">
                       <input 
-                        type="text" 
-                        className="w-full px-5 py-4 bg-bg-main border border-border-ui rounded-2xl text-text-primary font-bold outline-none focus:border-brand"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        type={showCurrentPassword ? "text" : "password"} 
+                        className="w-full px-5 py-4 bg-bg-main border border-border-ui rounded-xl text-text-primary font-bold outline-none focus:border-brand"
+                        value={formData.currentPassword}
+                        onChange={(e) => setFormData({...formData, currentPassword: e.target.value})}
                       />
+                      <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary">
+                        {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
                     </div>
+                  </div>
 
-                    <div className="h-px bg-border-ui/50" />
-
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Senha Atual</label>
+                      <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Nova Senha</label>
                       <div className="relative">
-                        <input 
-                          type={showCurrentPassword ? "text" : "password"} 
-                          className="w-full px-5 py-4 bg-bg-main border border-border-ui rounded-xl text-text-primary font-bold outline-none focus:border-brand"
-                          value={formData.currentPassword}
-                          onChange={(e) => setFormData({...formData, currentPassword: e.target.value})}
-                        />
-                        <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary">
-                          {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Nova Senha</label>
-                        <div className="relative">
-                          <input 
-                            type={showNewPassword ? "text" : "password"} 
-                            className="w-full px-5 py-3.5 bg-bg-main border border-border-ui rounded-xl text-text-primary font-bold outline-none focus:border-brand"
-                            value={formData.newPassword}
-                            onChange={(e) => setFormData({...formData, newPassword: e.target.value})}
-                          />
-                          <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary">
-                            {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                          </button>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Confirmar</label>
                         <input 
                           type={showNewPassword ? "text" : "password"} 
                           className="w-full px-5 py-3.5 bg-bg-main border border-border-ui rounded-xl text-text-primary font-bold outline-none focus:border-brand"
-                          value={formData.confirmPassword}
-                          onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+                          value={formData.newPassword}
+                          onChange={(e) => setFormData({...formData, newPassword: e.target.value})}
                         />
+                        <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary">
+                          {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
                       </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Confirmar</label>
+                      <input 
+                        type={showNewPassword ? "text" : "password"} 
+                        className="w-full px-5 py-3.5 bg-bg-main border border-border-ui rounded-xl text-text-primary font-bold outline-none focus:border-brand"
+                        value={formData.confirmPassword}
+                        onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+                      />
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              {activeTab === 'geral' && (
-                <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
-                  <header>
-                    <h3 className="text-lg font-black text-text-primary italic uppercase tracking-tighter">Sistema</h3>
-                  </header>
+            {activeTab === 'geral' && (
+              <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
+                <header>
+                  <h3 className="text-lg font-black text-text-primary italic uppercase tracking-tighter">Sistema</h3>
+                </header>
 
-                  {/* MODO ESCURO */}
-                  <div onClick={toggleTheme} className="flex items-center justify-between p-6 bg-bg-main/40 border border-border-ui/50 rounded-3xl cursor-pointer hover:bg-bg-main/60 transition-all">
-                    <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-xl ${isDarkMode ? 'bg-indigo-500/10 text-indigo-500' : 'bg-amber-500/10 text-amber-500'}`}>
-                        {isDarkMode ? <Moon size={20} /> : <Sun size={20} />}
-                      </div>
-                      <p className="text-[11px] font-black text-text-primary uppercase tracking-tight">Modo Escuro</p>
+                <div onClick={toggleTheme} className="flex items-center justify-between p-6 bg-bg-main/40 border border-border-ui/50 rounded-3xl cursor-pointer hover:bg-bg-main/60 transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className={`p-3 rounded-xl ${isDarkMode ? 'bg-indigo-500/10 text-indigo-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                      {isDarkMode ? <Moon size={20} /> : <Sun size={20} />}
                     </div>
-                    <div className={`w-12 h-6 rounded-full relative transition-all duration-300 ${isDarkMode ? 'bg-brand' : 'bg-border-ui'}`}>
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 ${isDarkMode ? 'left-7' : 'left-1'}`} />
-                    </div>
+                    <p className="text-[11px] font-black text-text-primary uppercase tracking-tight">Modo Escuro</p>
                   </div>
-
-                  {/* INSTALAÇÃO PWA */}
-                  <div 
-                    onClick={!isInstalled ? handleInstallApp : undefined}
-                    className={`flex items-center justify-between p-6 bg-bg-main/40 border border-border-ui/50 rounded-3xl transition-all ${!isInstalled ? 'cursor-pointer hover:bg-bg-main/60 border-brand/20' : 'opacity-80'}`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-xl ${isInstalled ? 'bg-green-500/10 text-green-500' : 'bg-brand/10 text-brand'}`}>
-                        {isInstalled ? <Smartphone size={20} /> : <Download size={20} />}
-                      </div>
-                      <div className="text-left">
-                        <p className="text-[11px] font-black text-text-primary uppercase tracking-tight">
-                          {isInstalled ? "App Instalado" : "Instalar Aplicativo"}
-                        </p>
-                        <p className="text-[9px] text-text-secondary font-bold uppercase italic leading-tight">
-                          {isInstalled ? "Versão Nativa Ativa" : isIOS ? "Adicionar à tela inicial" : "Acesso rápido e offline"}
-                        </p>
-                      </div>
-                    </div>
-                    {!isInstalled && (
-                      <div className="p-2 bg-brand/10 rounded-lg text-brand">
-                        {isIOS ? <Share size={16} /> : <Download size={16} />}
-                      </div>
-                    )}
-                    {isInstalled && <CheckCircle2 size={18} className="text-green-500" />}
+                  <div className={`w-12 h-6 rounded-full relative transition-all duration-300 ${isDarkMode ? 'bg-brand' : 'bg-border-ui'}`}>
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 ${isDarkMode ? 'left-7' : 'left-1'}`} />
                   </div>
-
-                  {/* PIN */}
-                  <div className={`p-6 border rounded-3xl transition-all ${isSettingPin ? 'bg-indigo-500/5 border-indigo-500/30' : 'bg-bg-main/40 border-border-ui/50'}`}>
-                    {!isSettingPin ? (
-                      <div onClick={handleTogglePin} className="flex items-center justify-between cursor-pointer">
-                        <div className="flex items-center gap-4">
-                          <div className={`p-3 rounded-xl ${pinEnabled ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30' : 'bg-bg-card text-text-secondary'}`}><Hash size={20} /></div>
-                          <div className="text-left">
-                            <p className={`text-[11px] font-black uppercase tracking-tight ${pinEnabled ? 'text-indigo-500' : 'text-text-primary'}`}>Proteção por PIN</p>
-                            <p className="text-[9px] text-text-secondary font-bold uppercase italic leading-tight">{pinEnabled ? "Ativado" : "Desativado"}</p>
-                          </div>
-                        </div>
-                        {pinEnabled && <CheckCircle2 size={18} className="text-indigo-500" />}
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest text-center">Digite o novo PIN (4 dígitos)</p>
-                        <input 
-                          autoFocus
-                          type="password"
-                          inputMode="numeric"
-                          maxLength={4}
-                          placeholder="0000"
-                          className="w-full bg-bg-card border-2 border-brand/30 rounded-2xl py-4 text-center text-2xl font-black tracking-[1em] outline-none focus:border-brand"
-                          value={tempPin}
-                          onChange={(e) => setTempPin(e.target.value.replace(/\D/g, ''))}
-                        />
-                        <div className="flex gap-2">
-                          <button type="button" onClick={() => setIsSettingPin(false)} className="flex-1 py-3 text-[10px] font-black uppercase text-text-secondary">Cancelar</button>
-                          <button type="button" onClick={saveNewPin} className="flex-1 py-3 bg-brand text-white text-[10px] font-black uppercase rounded-xl">Confirmar</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* ATUALIZAÇÃO */}
-                  <button type="button" onClick={handleForceUpdate} className="w-full flex items-center justify-between p-6 bg-bg-main/40 border border-border-ui/50 rounded-3xl hover:border-brand/30 transition-all group">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 rounded-xl bg-bg-card text-text-primary border border-border-ui/50 group-hover:text-brand transition-colors"><RefreshCw size={20} /></div>
-                      <p className="text-[11px] font-black text-text-primary uppercase tracking-tight">Atualizar Versão</p>
-                    </div>
-                  </button>
                 </div>
-              )}
-            </div>
 
-            <footer className="p-6 border-t border-border-ui/50 bg-bg-main/10 shrink-0">
-              <button 
-                type="submit" 
-                disabled={loading || isSettingPin} 
-                className="w-full py-4 bg-brand text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-brand/20 flex items-center justify-center gap-2"
-              >
-                {loading ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                Salvar Configurações
-              </button>
-            </footer>
-          </form>
-        </div>
+                <div 
+                  onClick={!isInstalled ? handleInstallApp : undefined}
+                  className={`flex items-center justify-between p-6 bg-bg-main/40 border border-border-ui/50 rounded-3xl transition-all ${!isInstalled ? 'cursor-pointer hover:bg-bg-main/60 border-brand/20' : 'opacity-80'}`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`p-3 rounded-xl ${isInstalled ? 'bg-green-500/10 text-green-500' : 'bg-brand/10 text-brand'}`}>
+                      {isInstalled ? <Smartphone size={20} /> : <Download size={20} />}
+                    </div>
+                    <div className="text-left">
+                      <p className="text-[11px] font-black text-text-primary uppercase tracking-tight">
+                        {isInstalled ? "App Instalado" : "Instalar Aplicativo"}
+                      </p>
+                      <p className="text-[9px] text-text-secondary font-bold uppercase italic leading-tight">
+                        {isInstalled ? "Versão Nativa Ativa" : isIOS ? "Adicionar à tela inicial" : "Acesso rápido e offline"}
+                      </p>
+                    </div>
+                  </div>
+                  {!isInstalled && (
+                    <div className="p-2 bg-brand/10 rounded-lg text-brand">
+                      {isIOS ? <Share size={16} /> : <Download size={16} />}
+                    </div>
+                  )}
+                  {isInstalled && <CheckCircle2 size={18} className="text-green-500" />}
+                </div>
+
+                <div className={`p-6 border rounded-3xl transition-all ${isSettingPin ? 'bg-indigo-500/5 border-indigo-500/30' : 'bg-bg-main/40 border-border-ui/50'}`}>
+                  {!isSettingPin ? (
+                    <div onClick={handleTogglePin} className="flex items-center justify-between cursor-pointer">
+                      <div className="flex items-center gap-4">
+                        <div className={`p-3 rounded-xl ${pinEnabled ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30' : 'bg-bg-card text-text-secondary'}`}><Hash size={20} /></div>
+                        <div className="text-left">
+                          <p className={`text-[11px] font-black uppercase tracking-tight ${pinEnabled ? 'text-indigo-500' : 'text-text-primary'}`}>Proteção por PIN</p>
+                          <p className="text-[9px] text-text-secondary font-bold uppercase italic leading-tight">{pinEnabled ? "Ativado" : "Desativado"}</p>
+                        </div>
+                      </div>
+                      {pinEnabled && <CheckCircle2 size={18} className="text-indigo-500" />}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest text-center">Digite o novo PIN (4 dígitos)</p>
+                      <input 
+                        autoFocus
+                        type="password"
+                        inputMode="numeric"
+                        maxLength={4}
+                        placeholder="0000"
+                        className="w-full bg-bg-card border-2 border-brand/30 rounded-2xl py-4 text-center text-2xl font-black tracking-[1em] outline-none focus:border-brand"
+                        value={tempPin}
+                        onChange={(e) => setTempPin(e.target.value.replace(/\D/g, ''))}
+                      />
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setIsSettingPin(false)} className="flex-1 py-3 text-[10px] font-black uppercase text-text-secondary">Cancelar</button>
+                        <button type="button" onClick={saveNewPin} className="flex-1 py-3 bg-brand text-white text-[10px] font-black uppercase rounded-xl">Confirmar</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <button type="button" onClick={handleForceUpdate} className="w-full flex items-center justify-between p-6 bg-bg-main/40 border border-border-ui/50 rounded-3xl hover:border-brand/30 transition-all group">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-xl bg-bg-card text-text-primary border border-border-ui/50 group-hover:text-brand transition-colors"><RefreshCw size={20} /></div>
+                    <p className="text-[11px] font-black text-text-primary uppercase tracking-tight">Atualizar Versão</p>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* FOOTER - Z-INDEX ELEVADO E POSIÇÃO FIXA NO MOBILE */}
+          <footer className="absolute bottom-0 left-0 right-0 z-[100] p-6 bg-bg-card border-t border-border-ui/50 md:relative md:bg-bg-main/10 shrink-0">
+            <button 
+              type="submit" 
+              disabled={loading || isSettingPin} 
+              className="w-full py-4 bg-brand text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-brand/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
+            >
+              {loading ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+              Salvar Configurações
+            </button>
+          </footer>
+
+        </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

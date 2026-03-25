@@ -7,10 +7,15 @@ const PinLock = ({ children }) => {
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    // 1. Verifica se o uso de PIN está ativo globalmente
     const usePin = localStorage.getItem('usePin') === 'true';
     const savedPin = localStorage.getItem('appPin');
     
-    if (usePin && savedPin) {
+    // 2. Verifica se o PIN já foi validado NESTA SESSÃO específica (aba aberta)
+    const pinValidatedThisSession = sessionStorage.getItem('pinValidated') === 'true';
+    
+    // Bloqueia apenas se o PIN estiver configurado E ainda não tiver sido validado nesta sessão
+    if (usePin && savedPin && !pinValidatedThisSession) {
       setIsLocked(true);
     }
   }, []);
@@ -24,6 +29,8 @@ const PinLock = ({ children }) => {
       if (newPin.length === 4) {
         const savedPin = localStorage.getItem('appPin');
         if (newPin === savedPin) {
+          // Salva a validação na sessão: sobrevive ao F5, mas morre ao fechar a aba
+          sessionStorage.setItem('pinValidated', 'true');
           setIsLocked(false);
         } else {
           setError(true);
@@ -41,10 +48,9 @@ const PinLock = ({ children }) => {
   if (!isLocked) return children;
 
   return (
-    // Troquei text-white por text-text-primary para respeitar o tema
     <div className="fixed inset-0 z-[99999] bg-bg-main flex flex-col items-center justify-center p-6 text-text-primary font-sans overflow-hidden transition-colors duration-300">
       
-      {/* Background Decorativo - Opacidade ajustada para não sumir no claro */}
+      {/* Background Decorativo */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand/10 blur-[120px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-brand/5 blur-[120px] rounded-full pointer-events-none" />
 
@@ -57,10 +63,10 @@ const PinLock = ({ children }) => {
           <h2 className="text-xl font-black italic uppercase tracking-tighter">
             Finance<span className="text-brand">MAX</span>
           </h2>
-          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-text-secondary opacity-60">Segurança Ativa</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-text-secondary opacity-60">Sessão Protegida</p>
         </div>
 
-        {/* Indicadores de PIN (Bolinhas) */}
+        {/* Indicadores de PIN */}
         <div className="flex gap-4 mb-16">
           {[1, 2, 3, 4].map((dot) => (
             <div
@@ -80,7 +86,6 @@ const PinLock = ({ children }) => {
             <button
               key={num}
               onClick={() => handleNumberClick(num.toString())}
-              // bg-bg-card garante que o botão se destaque do fundo
               className="w-full aspect-square rounded-2xl bg-bg-card border border-border-ui/50 flex items-center justify-center text-xl font-black text-text-primary hover:bg-brand/5 active:scale-90 active:bg-brand/10 transition-all shadow-sm"
             >
               {num}

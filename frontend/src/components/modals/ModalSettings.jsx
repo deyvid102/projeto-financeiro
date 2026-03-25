@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, User, Shield, Moon, Sun, Save, Loader2, 
-  Lock, Eye, EyeOff, AlertCircle, Smartphone 
+  Lock, Eye, EyeOff, AlertCircle, Smartphone, Download
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeContext';
 import api from '@/services/api';
@@ -15,6 +15,7 @@ const ModalSettings = ({ isOpen, onClose }) => {
   
   // Estado para armazenar o prompt do PWA
   const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isInstalled, setIsInstalled] = useState(false);
   
   const [alertConfig, setAlertConfig] = useState({ 
     show: false, 
@@ -38,51 +39,55 @@ const ModalSettings = ({ isOpen, onClose }) => {
     }
   });
 
-  // --- CAPTURA DO EVENTO PWA ---
+  // --- LÓGICA COMPLETA PWA ---
   useEffect(() => {
     const handleBeforeInstallPrompt = (e) => {
-      // Previne o mini-infobar de aparecer no mobile por padrão
       e.preventDefault();
-      // Salva o evento para ser disparado pelo botão
       setDeferredPrompt(e);
+      console.log('PWA: Evento beforeinstallprompt capturado.');
+    };
+
+    const handleAppInstalled = () => {
+      setDeferredPrompt(null);
+      setIsInstalled(true);
+      console.log('PWA: Aplicativo instalado com sucesso.');
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    // Verifica se já está rodando como PWA
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true);
+    }
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
 
   const handleInstallApp = async () => {
-    if (deferredPrompt) {
-      // Mostra o prompt de instalação
-      deferredPrompt.prompt();
-      // Aguarda o usuário responder
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        // Se instalou, limpamos o estado para esconder o botão
-        setDeferredPrompt(null);
-      }
+    if (!deferredPrompt) return;
+
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
     }
   };
 
-  // --- TRAVA DE SEGURANÇA PARA ESCONDER A BOTTOM BAR ---
+  // --- TRAVA DE SEGURANÇA BOTTOM BAR ---
   useEffect(() => {
     const bottomBar = document.querySelector('nav[aria-label="Navegação principal"]');
-    
     if (isOpen) {
       document.body.style.overflow = 'hidden';
-      if (bottomBar) {
-        bottomBar.style.display = 'none';
-      }
+      if (bottomBar) bottomBar.style.display = 'none';
     } else {
       document.body.style.overflow = 'unset';
-      if (bottomBar) {
-        bottomBar.style.display = 'block';
-      }
+      if (bottomBar) bottomBar.style.display = 'block';
     }
-
     return () => {
       document.body.style.overflow = 'unset';
       if (bottomBar) bottomBar.style.display = 'block';
@@ -137,7 +142,7 @@ const ModalSettings = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black backdrop-blur-xl md:p-4">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black backdrop-blur-xl md:p-4 text-left">
       
       <AlertStyle 
         show={alertConfig.show} 
@@ -146,7 +151,6 @@ const ModalSettings = ({ isOpen, onClose }) => {
         onClose={() => setAlertConfig({ ...alertConfig, show: false })}
       />
 
-      {/* Overlay para fechar no clique fora (Desktop) */}
       <div className="absolute inset-0 hidden md:block" onClick={onClose} />
       
       <div className="relative w-full h-full md:h-[620px] md:max-w-2xl bg-bg-card md:rounded-[2.5rem] shadow-2xl border-border-ui overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200">
@@ -188,7 +192,7 @@ const ModalSettings = ({ isOpen, onClose }) => {
             <div className="p-6 md:p-8 flex-1 overflow-y-auto custom-scrollbar">
               
               {activeTab === 'perfil' && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4 md:slide-in-from-right-4 duration-300 text-left">
+                <div className="space-y-6 animate-in slide-in-from-bottom-4 md:slide-in-from-right-4 duration-300">
                   <header>
                     <h3 className="text-lg font-black text-text-primary italic uppercase tracking-tighter">Dados de Acesso</h3>
                     <p className="text-[9px] text-text-secondary uppercase font-bold tracking-widest italic">Nome e Sobrenome (Máx 3 palavras)</p>
@@ -255,7 +259,12 @@ const ModalSettings = ({ isOpen, onClose }) => {
               )}
 
               {activeTab === 'geral' && (
-                <div className="space-y-4 animate-in slide-in-from-bottom-4 md:slide-in-from-right-4 duration-300 text-left">
+                <div className="space-y-4 animate-in slide-in-from-bottom-4 md:slide-in-from-right-4 duration-300">
+                  <header>
+                    <h3 className="text-lg font-black text-text-primary italic uppercase tracking-tighter">Personalização</h3>
+                  </header>
+
+                  {/* TEMA */}
                   <div 
                     onClick={toggleTheme}
                     className="flex items-center justify-between p-6 bg-bg-main/40 border border-border-ui/50 rounded-3xl cursor-pointer hover:bg-bg-main/60 transition-all"
@@ -271,11 +280,11 @@ const ModalSettings = ({ isOpen, onClose }) => {
                     </div>
                   </div>
 
-                  {/* NOVO: OPÇÃO DE INSTALAR O APP (APENAS MOBILE E SE O NAVEGADOR PERMITIR) */}
-                  {deferredPrompt && (
+                  {/* INSTALAÇÃO PWA */}
+                  {!isInstalled && deferredPrompt && (
                     <div 
                       onClick={handleInstallApp}
-                      className="md:hidden flex items-center justify-between p-6 bg-brand/10 border border-brand/20 rounded-3xl cursor-pointer hover:bg-brand/20 transition-all"
+                      className="flex items-center justify-between p-6 bg-brand/10 border border-brand/20 rounded-3xl cursor-pointer hover:bg-brand/20 transition-all border-dashed"
                     >
                       <div className="flex items-center gap-4">
                         <div className="p-3 rounded-xl bg-brand text-white shadow-lg shadow-brand/30">
@@ -283,12 +292,19 @@ const ModalSettings = ({ isOpen, onClose }) => {
                         </div>
                         <div>
                           <p className="text-[11px] font-black text-brand uppercase tracking-tight">Instalar Aplicativo</p>
-                          <p className="text-[9px] text-text-secondary font-bold">Tenha acesso rápido na tela inicial</p>
+                          <p className="text-[9px] text-text-secondary font-bold uppercase italic">Acesse mais rápido pela tela inicial</p>
                         </div>
                       </div>
+                      <Download size={18} className="text-brand animate-bounce" />
                     </div>
                   )}
 
+                  {isInstalled && (
+                    <div className="p-4 bg-bg-main/20 border border-border-ui/30 rounded-2xl flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                      <p className="text-[9px] font-black text-text-secondary uppercase tracking-widest">Aplicativo já instalado ou em modo Nativo</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

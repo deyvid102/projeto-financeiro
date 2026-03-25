@@ -10,6 +10,22 @@ const NotificationCenter = () => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // --- FUNÇÃO PARA DISPARAR NOTIFICAÇÃO PWA NO CELULAR ---
+  const triggerNativeNotification = useCallback((title, body) => {
+    if (!("Notification" in window)) return;
+
+    if (Notification.permission === "granted") {
+      new Notification(title, {
+        body: body,
+        icon: '/pwa-192x192.png', // Verifique se este caminho está correto na sua /public
+        badge: '/pwa-192x192.png',
+        vibrate: [200, 100, 200]
+      });
+    } else if (Notification.permission !== "denied") {
+      Notification.requestPermission();
+    }
+  }, []);
+
   const markAllAsRead = useCallback(() => {
     if (notifications.length === 0) return;
     const dismissedIds = JSON.parse(localStorage.getItem('dismissed_notifications') || '[]');
@@ -52,16 +68,22 @@ const NotificationCenter = () => {
       const alerts = [];
       const today = new Date();
 
-      // Alerta de Atualização
+      // --- ALERTA DE ATUALIZAÇÃO (NOTA DE TESTE) ---
       const currentVersion = '1.0.0-beta';
       if (localStorage.getItem('seen_update_version') !== currentVersion) {
+        const updateTitle = 'FinanceMAX Atualizado';
+        const updateDesc = 'Investimentos em fase beta. Toque para ver detalhes.';
+        
         alerts.push({
           id: 'update-beta-investments',
           title: 'Nota de Atualização',
-          desc: 'Foram feitas modificações nos investimentos (ainda em fase de testes). Qualquer problema, reporte ao admin para ajustes.',
+          desc: 'Foram feitas modificações nos investimentos (ainda em fase de testes). Qualquer problema, reporte ao admin.',
           icon: <Info size={14} className="text-brand animate-pulse" />,
           date: new Date()
         });
+
+        // Tenta disparar a notificação nativa assim que detectar a versão nova
+        triggerNativeNotification(updateTitle, updateDesc);
       }
 
       // Lógica de Resumo Mensal
@@ -78,7 +100,7 @@ const NotificationCenter = () => {
         });
       }
 
-      // Parcelas, Investimentos e Metas... (Lógica mantida conforme sua solicitação)
+      // Rendimentos de Investimentos
       investRes.data.forEach(inv => {
         const idProfit = `inv-profit-${inv._id}`;
         if (inv.type !== 'renda fixa' && inv.currentPrice > 0 && inv.amountInvested > 0) {
@@ -102,7 +124,7 @@ const NotificationCenter = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [triggerNativeNotification]);
 
   useEffect(() => {
     fetchAlerts(false);
@@ -129,7 +151,7 @@ const NotificationCenter = () => {
           <div className="fixed inset-0 z-40 bg-black/5 md:bg-transparent" onClick={() => setIsOpen(false)} />
           <div className="fixed md:absolute top-16 md:top-full right-4 md:right-0 mt-2 w-[calc(100vw-2rem)] md:w-80 bg-bg-card border border-border-ui rounded-[2rem] shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
             <div className="p-5 border-b border-border-ui/50 flex justify-between items-center bg-bg-main/20">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-text-primary">Monitor de Ativos</h3>
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-text-primary italic">Central de Alertas</h3>
               <button onClick={() => setIsOpen(false)} className="md:hidden text-text-secondary p-1"><X size={16} /></button>
             </div>
             
@@ -141,21 +163,31 @@ const NotificationCenter = () => {
                   <div key={n.id} className="p-4 border-b border-border-ui/30 hover:bg-bg-main/40 transition-colors flex gap-4 relative group">
                     <div className="mt-1 p-2 bg-bg-main rounded-lg h-fit border border-border-ui/50 shrink-0">{n.icon}</div>
                     <div className="flex-1 text-left min-w-0">
-                      <p className="text-[10px] font-black text-text-primary uppercase tracking-tight">{n.title}</p>
+                      <p className="text-[10px] font-black text-text-primary uppercase tracking-tight italic">{n.title}</p>
                       <p className="text-[11px] text-text-secondary mt-1 leading-relaxed font-medium">{n.desc}</p>
                     </div>
-                    <button onClick={() => dismissNotification(n.id)} className="opacity-40 hover:opacity-100 p-1 self-start">
+                    <button onClick={() => dismissNotification(n.id)} className="opacity-40 hover:opacity-100 p-1 self-start transition-opacity">
                       <X size={14} className="text-text-secondary hover:text-red-500" />
                     </button>
                   </div>
                 ))
               ) : (
                 <div className="p-12 text-center opacity-40">
-                  <CircleAlert size={24} className="mx-auto mb-2" />
-                  <p className="text-[9px] font-black uppercase tracking-widest">Radar Limpo</p>
+                  <CircleAlert size={24} className="mx-auto mb-2 text-text-secondary" />
+                  <p className="text-[9px] font-black uppercase tracking-widest text-text-secondary">Nenhuma notificação</p>
                 </div>
               )}
             </div>
+            
+            {/* BOTÃO PARA PEDIR PERMISSÃO (Caso o usuário ainda não tenha aceito) */}
+            {Notification.permission === 'default' && (
+               <button 
+                onClick={() => Notification.requestPermission()}
+                className="w-full p-3 bg-brand/10 text-brand text-[9px] font-black uppercase tracking-widest border-t border-brand/20 hover:bg-brand hover:text-white transition-all"
+               >
+                 Ativar Notificações Mobile
+               </button>
+            )}
           </div>
         </>
       )}

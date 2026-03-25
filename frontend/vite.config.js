@@ -14,8 +14,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       manifest: {
-        name: 'Financeiro Pessoal',
-        short_name: 'FinApp',
+        name: 'FinanceMAX - Gestão Financeira',
+        short_name: 'FinanceMAX',
         description: 'Meu sistema de gestão financeira',
         theme_color: '#000000',
         background_color: '#000000',

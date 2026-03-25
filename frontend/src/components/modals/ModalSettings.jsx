@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, User, Shield, Moon, Sun, Save, Loader2, 
-  Lock, Eye, EyeOff, AlertCircle, Smartphone, Download, RefreshCw, Share,
-  Fingerprint, CheckCircle2
+  Lock, Eye, EyeOff, Smartphone, Download, RefreshCw, Share,
+  Hash, CheckCircle2
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeContext';
 import api from '@/services/api';
@@ -12,19 +12,20 @@ const ModalSettings = ({ isOpen, onClose }) => {
   const { isDarkMode, toggleTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('perfil');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   
-  // Estado para PWA e Biometria
+  // Estados para visibilidade de senha
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
-  const [biometryEnabled, setBiometryEnabled] = useState(localStorage.getItem('useBiometry') === 'true');
   
-  const [alertConfig, setAlertConfig] = useState({ 
-    show: false, 
-    type: 'info', 
-    message: '' 
-  });
+  const [pinEnabled, setPinEnabled] = useState(localStorage.getItem('usePin') === 'true');
+  const [tempPin, setTempPin] = useState('');
+  const [isSettingPin, setIsSettingPin] = useState(false);
+
+  const [alertConfig, setAlertConfig] = useState({ show: false, type: 'info', message: '' });
 
   const [formData, setFormData] = useState(() => {
     const rawUser = localStorage.getItem('user');
@@ -42,7 +43,6 @@ const ModalSettings = ({ isOpen, onClose }) => {
     }
   });
 
-  // --- LÓGICA PWA E DETECÇÃO ---
   useEffect(() => {
     const isApple = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     setIsIOS(isApple);
@@ -70,146 +70,76 @@ const ModalSettings = ({ isOpen, onClose }) => {
     };
   }, []);
 
-  // --- LÓGICA DE BIOMETRIA (FACEID/DIGITAL) ---
-  const handleToggleBiometry = async () => {
-  if (biometryEnabled) {
-    localStorage.removeItem('useBiometry');
-    setBiometryEnabled(false);
-    showAlert("Biometria desativada.", "info");
-    return;
-  }
+  const showAlert = (message, type = 'error') => {
+    setAlertConfig({ show: true, message, type });
+  };
 
-  try {
-    // 1. Criar o desafio em formato binário (Obrigatório)
-    const challenge = new Uint8Array(32);
-    window.crypto.getRandomValues(challenge);
-    
-    // 2. Criar um ID de usuário único em formato binário
-    const userId = new TextEncoder().encode(formData.email || 'user_id_123');
-
-    // 3. REGISTRAR A PASSKEY (Isso abre o pop-up nativo para CRIAR a chave)
-    const credential = await navigator.credentials.create({
-      publicKey: {
-        challenge,
-        rp: { 
-          name: "FinanceMAX", 
-          id: window.location.hostname // Importante: deve ser o domínio (ex: financemax.render.com)
-        },
-        user: { 
-          id: userId, 
-          name: formData.email || "usuario@financemax.com", 
-          displayName: formData.name || "Usuário" 
-        },
-        pubKeyCredParams: [{ alg: -7, type: "public-key" }], // ES256
-        authenticatorSelection: {
-          authenticatorAttachment: "platform", // Força o hardware do celular (Digital/FaceID)
-          userVerification: "required",
-          residentKey: "required" // Isso garante que a chave fique salva no aparelho
-        },
-        timeout: 60000
-      }
-    });
-
-    if (credential) {
-      localStorage.setItem('useBiometry', 'true');
-      setBiometryEnabled(true);
-      showAlert("Aparelho autorizado com sucesso!", "success");
-    }
-
-  } catch (err) {
-    console.error("Erro no registro:", err);
-    showAlert("Falha ao autorizar biometria. Tente novamente.", "error");
-  }
-};
-
-  const handleInstallApp = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') setDeferredPrompt(null);
-    } else if (isIOS) {
-      showAlert("No iPhone: Toque em 'Compartilhar' e 'Adicionar à Tela de Início'", "info");
+  // --- LÓGICA DE PIN ---
+  const handleTogglePin = () => {
+    if (pinEnabled) {
+      localStorage.removeItem('usePin');
+      localStorage.removeItem('appPin');
+      setPinEnabled(false);
+      setTempPin('');
+      showAlert("Trava de PIN desativada.", "info");
     } else {
-      showAlert("Use o menu do navegador para 'Instalar Aplicativo'", "info");
+      setIsSettingPin(true);
+    }
+  };
+
+  const saveNewPin = (e) => {
+    e.preventDefault();
+    if (tempPin.length === 4) {
+      localStorage.setItem('appPin', tempPin);
+      localStorage.setItem('usePin', 'true');
+      setPinEnabled(true);
+      setIsSettingPin(false);
+      setTempPin('');
+      showAlert("PIN configurado!", "success");
+    } else {
+      showAlert("O PIN deve ter 4 dígitos.");
     }
   };
 
   const handleForceUpdate = () => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then((registrations) => {
-        for (let registration of registrations) registration.update();
+        for (let reg of registrations) reg.update();
         showAlert("Buscando atualizações...", "success");
         setTimeout(() => window.location.reload(true), 1000);
       });
     }
   };
 
-  // --- TRAVA DE SEGURANÇA BOTTOM BAR ---
-  useEffect(() => {
-    const bottomBar = document.querySelector('nav[aria-label="Navegação principal"]');
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      if (bottomBar) bottomBar.style.display = 'none';
-    } else {
-      document.body.style.overflow = 'unset';
-      if (bottomBar) bottomBar.style.display = 'block';
-    }
-    return () => {
-      document.body.style.overflow = 'unset';
-      if (bottomBar) bottomBar.style.display = 'block';
-    };
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
-  const showAlert = (message, type = 'error') => {
-    setAlertConfig({ show: true, message, type });
-  };
-
-  const handleNameChange = (e) => {
-    const value = e.target.value;
-    const words = value.trim().split(/\s+/);
-    if (words.length <= 3) {
-      setFormData({ ...formData, name: value });
-    }
-  };
-
   const handleSave = async (e) => {
     e.preventDefault();
-    const finalName = formData.name.trim().replace(/\s+/g, ' ');
-    
-    if (formData.newPassword) {
-      if (formData.newPassword.length < 6) return showAlert("A nova senha deve ter 6+ caracteres.");
-      if (formData.newPassword !== formData.confirmPassword) return showAlert("As senhas não coincidem.");
-      if (!formData.currentPassword) return showAlert("Senha atual necessária.");
+    if (isSettingPin) return;
+
+    if (formData.newPassword && formData.newPassword !== formData.confirmPassword) {
+      return showAlert("As novas senhas não coincidem.");
     }
 
     setLoading(true);
     try {
       const response = await api.put('/users/profile', {
-        name: finalName,
+        name: formData.name,
         currentPassword: formData.currentPassword,
         newPassword: formData.newPassword || undefined
       });
-
-      localStorage.setItem('user_name', response.data.name);
       localStorage.setItem('user', JSON.stringify(response.data));
-      
-      showAlert("Configurações atualizadas!", "success");
-      setTimeout(() => {
-        onClose();
-        window.location.reload();
-      }, 1500);
+      showAlert("Configurações salvas!", "success");
+      setTimeout(() => { onClose(); window.location.reload(); }, 1500);
     } catch (err) {
-      showAlert(err.response?.data?.message || "Senha atual incorreta", "error");
+      showAlert(err.response?.data?.message || "Erro ao salvar", "error");
     } finally {
       setLoading(false);
     }
   };
 
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xl md:p-4 text-left">
-      
       <AlertStyle 
         show={alertConfig.show} 
         type={alertConfig.type} 
@@ -217,10 +147,16 @@ const ModalSettings = ({ isOpen, onClose }) => {
         onClose={() => setAlertConfig({ ...alertConfig, show: false })}
       />
 
-      <div className="absolute inset-0 hidden md:block" onClick={onClose} />
-      
       <div className="relative w-full h-full md:h-[650px] md:max-w-2xl bg-bg-card md:rounded-[2.5rem] shadow-2xl border border-border-ui/50 overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-200">
         
+        {/* BOTÃO X PARA SAIR (DESKTOP) */}
+        <button 
+          onClick={onClose}
+          className="hidden md:flex absolute top-6 right-6 z-50 p-2 bg-bg-main/50 hover:bg-red-500/10 hover:text-red-500 rounded-full transition-all text-text-secondary"
+        >
+          <X size={20} />
+        </button>
+
         {/* HEADER MOBILE */}
         <div className="md:hidden flex items-center justify-between p-6 border-b border-border-ui bg-bg-main/20 shrink-0">
           <h2 className="text-sm font-black text-text-primary uppercase italic">Config<span className="text-brand">MAX</span></h2>
@@ -231,10 +167,8 @@ const ModalSettings = ({ isOpen, onClose }) => {
         <div className="w-full md:w-48 bg-bg-main/30 border-r border-border-ui/50 p-4 md:p-6 flex flex-row md:flex-col gap-2 shrink-0">
           <button 
             type="button"
-            onClick={() => setActiveTab('perfil')}
-            className={`flex-1 md:flex-none flex items-center justify-center md:justify-start gap-3 px-4 py-3 rounded-xl transition-all ${
-              activeTab === 'perfil' ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-text-secondary hover:bg-bg-main'
-            }`}
+            onClick={() => { setActiveTab('perfil'); setIsSettingPin(false); }}
+            className={`flex-1 md:flex-none flex items-center justify-center md:justify-start gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'perfil' ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-text-secondary hover:bg-bg-main'}`}
           >
             <User size={18} />
             <span className="text-[10px] font-black uppercase tracking-widest">Perfil</span>
@@ -242,10 +176,8 @@ const ModalSettings = ({ isOpen, onClose }) => {
           
           <button 
             type="button"
-            onClick={() => setActiveTab('geral')}
-            className={`flex-1 md:flex-none flex items-center justify-center md:justify-start gap-3 px-4 py-3 rounded-xl transition-all ${
-              activeTab === 'geral' ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-text-secondary hover:bg-bg-main'
-            }`}
+            onClick={() => { setActiveTab('geral'); setIsSettingPin(false); }}
+            className={`flex-1 md:flex-none flex items-center justify-center md:justify-start gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'geral' ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-text-secondary hover:bg-bg-main'}`}
           >
             <Shield size={18} />
             <span className="text-[10px] font-black uppercase tracking-widest">Geral</span>
@@ -258,10 +190,9 @@ const ModalSettings = ({ isOpen, onClose }) => {
             <div className="p-6 md:p-8 flex-1 overflow-y-auto custom-scrollbar">
               
               {activeTab === 'perfil' && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4 md:slide-in-from-right-4 duration-300">
+                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
                   <header>
                     <h3 className="text-lg font-black text-text-primary italic uppercase tracking-tighter">Dados de Acesso</h3>
-                    <p className="text-[9px] text-text-secondary uppercase font-bold tracking-widest italic">Nome e Sobrenome (Máx 3 palavras)</p>
                   </header>
 
                   <div className="space-y-5">
@@ -269,55 +200,54 @@ const ModalSettings = ({ isOpen, onClose }) => {
                       <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Nome Completo</label>
                       <input 
                         type="text" 
-                        placeholder="Nome Sobrenome"
-                        className="w-full px-5 py-4 bg-bg-main border border-border-ui rounded-2xl text-text-primary font-bold outline-none focus:border-brand transition-all"
+                        className="w-full px-5 py-4 bg-bg-main border border-border-ui rounded-2xl text-text-primary font-bold outline-none focus:border-brand"
                         value={formData.name}
-                        onChange={handleNameChange}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       />
                     </div>
 
                     <div className="h-px bg-border-ui/50" />
 
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <Lock size={14} className="text-brand" />
-                        <h4 className="text-[10px] font-black text-text-primary uppercase tracking-widest">Segurança</h4>
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Senha Atual</label>
+                    {/* SENHA ATUAL COM OLHINHO */}
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Senha Atual</label>
+                      <div className="relative">
                         <input 
-                          type="password" 
-                          className="w-full px-5 py-4 bg-bg-main border border-border-ui rounded-xl text-text-primary font-bold outline-none focus:border-brand text-sm"
+                          type={showCurrentPassword ? "text" : "password"} 
+                          className="w-full px-5 py-4 bg-bg-main border border-border-ui rounded-xl text-text-primary font-bold outline-none focus:border-brand"
                           value={formData.currentPassword}
                           onChange={(e) => setFormData({...formData, currentPassword: e.target.value})}
                         />
+                        <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary">
+                          {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
                       </div>
+                    </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Nova Senha</label>
-                          <div className="relative">
-                            <input 
-                              type={showPassword ? "text" : "password"} 
-                              className="w-full px-5 py-3.5 bg-bg-main border border-border-ui rounded-xl text-text-primary font-bold outline-none focus:border-brand text-sm"
-                              value={formData.newPassword}
-                              onChange={(e) => setFormData({...formData, newPassword: e.target.value})}
-                            />
-                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary">
-                              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Confirmar Nova</label>
+                    {/* NOVAS SENHAS */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Nova Senha</label>
+                        <div className="relative">
                           <input 
-                            type={showPassword ? "text" : "password"} 
-                            className="w-full px-5 py-3.5 bg-bg-main border border-border-ui rounded-xl text-text-primary font-bold outline-none focus:border-brand text-sm"
-                            value={formData.confirmPassword}
-                            onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+                            type={showNewPassword ? "text" : "password"} 
+                            className="w-full px-5 py-3.5 bg-bg-main border border-border-ui rounded-xl text-text-primary font-bold outline-none focus:border-brand"
+                            value={formData.newPassword}
+                            onChange={(e) => setFormData({...formData, newPassword: e.target.value})}
                           />
+                          <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary">
+                            {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
                         </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Confirmar</label>
+                        <input 
+                          type={showNewPassword ? "text" : "password"} 
+                          className="w-full px-5 py-3.5 bg-bg-main border border-border-ui rounded-xl text-text-primary font-bold outline-none focus:border-brand"
+                          value={formData.confirmPassword}
+                          onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+                        />
                       </div>
                     </div>
                   </div>
@@ -325,16 +255,12 @@ const ModalSettings = ({ isOpen, onClose }) => {
               )}
 
               {activeTab === 'geral' && (
-                <div className="space-y-4 animate-in slide-in-from-bottom-4 md:slide-in-from-right-4 duration-300">
+                <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
                   <header>
-                    <h3 className="text-lg font-black text-text-primary italic uppercase tracking-tighter">Personalização e Sistema</h3>
+                    <h3 className="text-lg font-black text-text-primary italic uppercase tracking-tighter">Sistema</h3>
                   </header>
 
-                  {/* TEMA */}
-                  <div 
-                    onClick={toggleTheme}
-                    className="flex items-center justify-between p-6 bg-bg-main/40 border border-border-ui/50 rounded-3xl cursor-pointer hover:bg-bg-main/60 transition-all"
-                  >
+                  <div onClick={toggleTheme} className="flex items-center justify-between p-6 bg-bg-main/40 border border-border-ui/50 rounded-3xl cursor-pointer hover:bg-bg-main/60 transition-all">
                     <div className="flex items-center gap-4">
                       <div className={`p-3 rounded-xl ${isDarkMode ? 'bg-indigo-500/10 text-indigo-500' : 'bg-amber-500/10 text-amber-500'}`}>
                         {isDarkMode ? <Moon size={20} /> : <Sun size={20} />}
@@ -346,80 +272,55 @@ const ModalSettings = ({ isOpen, onClose }) => {
                     </div>
                   </div>
 
-                  {/* BIOMETRIA (NOVO) */}
-                  <div 
-                    onClick={handleToggleBiometry}
-                    className={`flex items-center justify-between p-6 border rounded-3xl cursor-pointer transition-all ${
-                      biometryEnabled ? 'bg-indigo-500/10 border-indigo-500/30' : 'bg-bg-main/40 border-border-ui/50 hover:bg-bg-main/60'
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-xl ${biometryEnabled ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30' : 'bg-bg-card text-text-secondary border border-border-ui/50'}`}>
-                        <Fingerprint size={20} />
-                      </div>
-                      <div className="text-left">
-                        <p className={`text-[11px] font-black uppercase tracking-tight ${biometryEnabled ? 'text-indigo-500' : 'text-text-primary'}`}>
-                          Acesso por {isIOS ? 'FaceID' : 'Biometria'}
-                        </p>
-                        <p className="text-[9px] text-text-secondary font-bold uppercase italic leading-tight">Desbloquear app ao abrir</p>
-                      </div>
-                    </div>
-                    {biometryEnabled && <CheckCircle2 size={18} className="text-indigo-500 animate-in zoom-in" />}
-                  </div>
-
-                  {/* INSTALAÇÃO PWA */}
-                  <div className="grid grid-cols-1 gap-3">
-                    {!isInstalled && (
-                      <button 
-                        type="button"
-                        onClick={handleInstallApp}
-                        className="flex items-center justify-between p-6 bg-brand/10 border border-brand/20 rounded-3xl cursor-pointer hover:bg-brand/20 transition-all border-dashed"
-                      >
+                  {/* NOVO PIN SEM DISCAGEM */}
+                  <div className={`p-6 border rounded-3xl transition-all ${isSettingPin ? 'bg-indigo-500/5 border-indigo-500/30' : 'bg-bg-main/40 border-border-ui/50'}`}>
+                    {!isSettingPin ? (
+                      <div onClick={handleTogglePin} className="flex items-center justify-between cursor-pointer">
                         <div className="flex items-center gap-4">
-                          <div className="p-3 rounded-xl bg-brand text-white shadow-lg shadow-brand/30">
-                            <Smartphone size={20} />
-                          </div>
+                          <div className={`p-3 rounded-xl ${pinEnabled ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30' : 'bg-bg-card text-text-secondary'}`}><Hash size={20} /></div>
                           <div className="text-left">
-                            <p className="text-[11px] font-black text-brand uppercase tracking-tight">Instalar Aplicativo</p>
-                            <p className="text-[9px] text-text-secondary font-bold uppercase italic">{isIOS ? "Toque no ícone compartilhar do Safari" : "Acesse pela tela inicial"}</p>
+                            <p className={`text-[11px] font-black uppercase tracking-tight ${pinEnabled ? 'text-indigo-500' : 'text-text-primary'}`}>Proteção por PIN</p>
+                            <p className="text-[9px] text-text-secondary font-bold uppercase italic leading-tight">{pinEnabled ? "Ativado" : "Desativado"}</p>
                           </div>
                         </div>
-                        {isIOS ? <Share size={18} className="text-brand" /> : <Download size={18} className="text-brand animate-bounce" />}
-                      </button>
-                    )}
-
-                    <button 
-                      type="button"
-                      onClick={handleForceUpdate}
-                      className="flex items-center justify-between p-6 bg-bg-main/40 border border-border-ui/50 rounded-3xl hover:border-brand/30 transition-all group"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="p-3 rounded-xl bg-bg-card text-text-primary border border-border-ui/50 group-hover:text-brand transition-colors">
-                          <RefreshCw size={20} />
-                        </div>
-                        <div className="text-left">
-                          <p className="text-[11px] font-black text-text-primary uppercase tracking-tight">Atualizar Versão</p>
-                          <p className="text-[9px] text-text-secondary font-bold uppercase italic">Sincronizar cache e manifesto</p>
-                        </div>
+                        {pinEnabled && <CheckCircle2 size={18} className="text-indigo-500" />}
                       </div>
-                    </button>
-
-                    {isInstalled && (
-                      <div className="p-4 bg-bg-main/20 border border-border-ui/30 rounded-2xl flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                        <p className="text-[9px] font-black text-text-secondary uppercase tracking-widest text-left">O FinanceMAX está rodando como app nativo.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest text-center">Digite o novo PIN (4 dígitos)</p>
+                        <input 
+                          autoFocus
+                          type="password"
+                          inputMode="numeric"
+                          maxLength={4}
+                          placeholder="0000"
+                          className="w-full bg-bg-card border-2 border-brand/30 rounded-2xl py-4 text-center text-2xl font-black tracking-[1em] outline-none focus:border-brand"
+                          value={tempPin}
+                          onChange={(e) => setTempPin(e.target.value.replace(/\D/g, ''))}
+                        />
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => setIsSettingPin(false)} className="flex-1 py-3 text-[10px] font-black uppercase text-text-secondary">Cancelar</button>
+                          <button type="button" onClick={saveNewPin} className="flex-1 py-3 bg-brand text-white text-[10px] font-black uppercase rounded-xl">Confirmar</button>
+                        </div>
                       </div>
                     )}
                   </div>
+
+                  <button type="button" onClick={handleForceUpdate} className="w-full flex items-center justify-between p-6 bg-bg-main/40 border border-border-ui/50 rounded-3xl hover:border-brand/30 transition-all group">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 rounded-xl bg-bg-card text-text-primary border border-border-ui/50 group-hover:text-brand transition-colors"><RefreshCw size={20} /></div>
+                      <p className="text-[11px] font-black text-text-primary uppercase tracking-tight">Atualizar Versão</p>
+                    </div>
+                  </button>
                 </div>
               )}
             </div>
 
-            <footer className="p-6 border-t border-border-ui/50 bg-bg-main/10 flex flex-col md:flex-row gap-3 shrink-0">
+            <footer className="p-6 border-t border-border-ui/50 bg-bg-main/10 shrink-0">
               <button 
                 type="submit" 
-                disabled={loading} 
-                className="order-1 md:order-2 flex-1 md:flex-none px-8 py-4 bg-brand text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-brand/20 flex items-center justify-center gap-2"
+                disabled={loading || isSettingPin} 
+                className="w-full py-4 bg-brand text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-brand/20 flex items-center justify-center gap-2"
               >
                 {loading ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
                 Salvar Configurações

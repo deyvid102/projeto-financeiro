@@ -4,7 +4,8 @@ import {
   getInvestments, 
   updateInvestmentValue, 
   deleteInvestment,
-  liquidateInvestment 
+  liquidateInvestment,
+  getTickerPrice // <--- Importado com sucesso agora
 } from '../controllers/ControlInvestment.js';
 import { protect } from '../middleware/AuthMiddleware.js';
 
@@ -15,14 +16,15 @@ const router = express.Router();
  */
 router.use(protect); 
 
-// --- ROTAS GERAIS ---
-// POST: Cria investimento (processa ticker, quantity, etc)
-// GET: Lista investimentos (calcula valores em tempo real via API/Datas)
+// --- ROTAS GERAIS E ESTÁTICAS ---
+// Importante: /price deve vir ANTES de /:id para não haver conflito
+router.get('/price', getTickerPrice);
+
 router.route('/')
   .post(createInvestment)
   .get(getInvestments);
 
-// --- ROTAS DE AÇÕES ESPECÍFICAS ---
+// --- ROTAS DE ATIVOS ESPECÍFICOS (DINÂMICAS) ---
 router.route('/:id')
   .put(updateInvestmentValue)
   .delete(deleteInvestment);

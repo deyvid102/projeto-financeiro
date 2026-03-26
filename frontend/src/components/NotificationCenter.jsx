@@ -10,45 +10,39 @@ const NotificationCenter = () => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // --- FUNÇÃO PARA DISPARAR NOTIFICAÇÃO PWA NO CELULAR ---
-  const triggerNativeNotification = useCallback((title, body) => {
+  // --- DISPARO DE NOTIFICAÇÃO NATIVA (VIA SERVICE WORKER) ---
+  const triggerNativeNotification = useCallback(async (title, body) => {
     if (!("Notification" in window)) return;
 
     if (Notification.permission === "granted") {
-      new Notification(title, {
-        body: body,
-        icon: '/pwa-192x192.png', // Verifique se este caminho está correto na sua /public
-        badge: '/pwa-192x192.png',
-        vibrate: [200, 100, 200]
-      });
-    } else if (Notification.permission !== "denied") {
-      Notification.requestPermission();
+      // Tenta disparar via Service Worker (Melhor para PWA/Chrome)
+      const registration = await navigator.serviceWorker?.getRegistration();
+      
+      if (registration) {
+        registration.showNotification(title, {
+          body: body,
+          icon: '/pwa-192x192.png',
+          badge: '/pwa-192x192.png',
+          vibrate: [200, 100, 200],
+          tag: 'finance-max-alert', // Evita spam de notificações iguais
+          renotify: true
+        });
+      } else {
+        // Fallback caso não haja service worker ativo no momento
+        new Notification(title, { body, icon: '/pwa-192x192.png' });
+      }
     }
   }, []);
 
-  const markAllAsRead = useCallback(() => {
-    if (notifications.length === 0) return;
-    const dismissedIds = JSON.parse(localStorage.getItem('dismissed_notifications') || '[]');
-    const currentNotifIds = notifications.map(n => n.id);
-    const newDismissed = [...new Set([...dismissedIds, ...currentNotifIds])];
-    localStorage.setItem('dismissed_notifications', JSON.stringify(newDismissed));
-    
-    if (notifications.some(n => n.id === 'update-beta-investments')) {
-      localStorage.setItem('seen_update_version', '1.0.0-beta');
+  const requestPermission = async () => {
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      triggerNativeNotification("FinanceMAX", "As notificações estão ativadas!");
     }
-  }, [notifications]);
-
-  useEffect(() => {
-    if (isOpen) markAllAsRead();
-  }, [isOpen, markAllAsRead]);
+  };
 
   const dismissNotification = useCallback((id) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
-    
-    if (id === 'update-beta-investments') {
-      localStorage.setItem('seen_update_version', '1.0.0-beta');
-    }
-
     const dismissed = JSON.parse(localStorage.getItem('dismissed_notifications') || '[]');
     if (!dismissed.includes(id)) {
       localStorage.setItem('dismissed_notifications', JSON.stringify([...dismissed, id]));
@@ -58,63 +52,46 @@ const NotificationCenter = () => {
   const fetchAlerts = useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true);
     try {
-      const [transRes, investRes, goalsRes] = await Promise.all([
-        api.get('/transactions'), 
-        api.get('/investments'),
-        api.get('/goals')
-      ]);
-
+      const [investRes] = await Promise.all([api.get('/investments')]);
       const dismissedIds = JSON.parse(localStorage.getItem('dismissed_notifications') || '[]');
       const alerts = [];
-      const today = new Date();
 
-      // --- ALERTA DE ATUALIZAÇÃO (NOTA DE TESTE) ---
+      // Exemplo: Alerta de Versão Beta
       const currentVersion = '1.0.0-beta';
       if (localStorage.getItem('seen_update_version') !== currentVersion) {
-        const updateTitle = 'FinanceMAX Atualizado';
-        const updateDesc = 'Investimentos em fase beta. Toque para ver detalhes.';
-        
-        alerts.push({
-          id: 'update-beta-investments',
-          title: 'Nota de Atualização',
-          desc: 'Foram feitas modificações nos investimentos (ainda em fase de testes). Qualquer problema, reporte ao admin.',
-          icon: <Info size={14} className="text-brand animate-pulse" />,
-          date: new Date()
-        });
-
-        // Tenta disparar a notificação nativa assim que detectar a versão nova
-        triggerNativeNotification(updateTitle, updateDesc);
+        const id = 'update-beta-investments';
+        if (!dismissedIds.includes(id)) {
+          alerts.push({
+            id,
+            title: 'Nota de Atualização',
+            desc: 'Sistema de investimentos atualizado para Beta 1.0.',
+            icon: <Info size={14} className="text-brand animate-pulse" />,
+            date: new Date()
+          });
+          // Notificação no Dispositivo
+          triggerNativeNotification('FinanceMAX Atualizado', 'Confira as novidades no painel de investimentos.');
+          localStorage.setItem('seen_update_version', currentVersion);
+        }
       }
 
-      // Lógica de Resumo Mensal
-      const lastMonth = new Date();
-      lastMonth.setMonth(today.getMonth() - 1);
-      const summaryId = `summary-${lastMonth.getMonth() + 1}-${lastMonth.getFullYear()}`;
-      if (!dismissedIds.includes(summaryId)) {
-        alerts.push({
-          id: summaryId,
-          title: 'Resumo Disponível',
-          desc: `O relatório mensal está pronto para visualização.`,
-          icon: <BarChart3 size={14} className="text-brand" />,
-          date: new Date(today.getFullYear(), today.getMonth(), 1)
-        });
-      }
-
-      // Rendimentos de Investimentos
+      // Exemplo: Alerta de Rentabilidade Alta (Profit > 5%)
       investRes.data.forEach(inv => {
         const idProfit = `inv-profit-${inv._id}`;
-        if (inv.type !== 'renda fixa' && inv.currentPrice > 0 && inv.amountInvested > 0) {
-          const currentValue = inv.currentPrice * (inv.quantity || 0);
-          const profitPercent = ((currentValue - inv.amountInvested) / inv.amountInvested) * 100;
-          if (profitPercent >= 5 && !dismissedIds.includes(idProfit)) {
-            alerts.push({ 
-              id: idProfit, 
-              title: 'Ativo em Alta', 
-              desc: `${inv.ticker || inv.name} valorizou ${profitPercent.toFixed(1)}%!`, 
-              icon: <TrendingUp size={14} className="text-emerald-500" />, 
-              date: new Date() 
-            });
-          }
+        const profitPercent = Number(inv.profitPercentage || 0);
+
+        if (profitPercent >= 5 && !dismissedIds.includes(idProfit)) {
+          const title = 'Ativo em Alta! 🚀';
+          const msg = `${inv.ticker || inv.name} subiu ${profitPercent.toFixed(2)}%!`;
+          
+          alerts.push({ 
+            id: idProfit, 
+            title: title, 
+            desc: msg, 
+            icon: <TrendingUp size={14} className="text-emerald-500" />, 
+            date: new Date() 
+          });
+          
+          triggerNativeNotification(title, msg);
         }
       });
 
@@ -128,7 +105,7 @@ const NotificationCenter = () => {
 
   useEffect(() => {
     fetchAlerts(false);
-    const interval = setInterval(() => fetchAlerts(true), 45000);
+    const interval = setInterval(() => fetchAlerts(true), 60000); // 1 minuto
     return () => clearInterval(interval);
   }, [fetchAlerts]);
 
@@ -148,23 +125,23 @@ const NotificationCenter = () => {
 
       {isOpen && (
         <>
-          <div className="fixed inset-0 z-40 bg-black/5 md:bg-transparent" onClick={() => setIsOpen(false)} />
-          <div className="fixed md:absolute top-16 md:top-full right-4 md:right-0 mt-2 w-[calc(100vw-2rem)] md:w-80 bg-bg-card border border-border-ui rounded-[2rem] shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div className="fixed md:absolute top-16 md:top-full right-4 md:right-0 mt-2 w-[calc(100vw-2rem)] md:w-80 bg-bg-card border border-border-ui rounded-[2rem] shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-border-ui/50 flex justify-between items-center bg-bg-main/20">
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-text-primary italic">Central de Alertas</h3>
-              <button onClick={() => setIsOpen(false)} className="md:hidden text-text-secondary p-1"><X size={16} /></button>
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-text-primary italic">Alertas do Sistema</h3>
+              <button onClick={() => setIsOpen(false)} className="text-text-secondary hover:text-brand"><X size={16} /></button>
             </div>
             
-            <div className="max-h-[60vh] md:max-h-[350px] overflow-y-auto custom-scrollbar">
+            <div className="max-h-[350px] overflow-y-auto">
               {loading ? (
                 <div className="p-10 flex justify-center"><Loader2 className="animate-spin text-brand" size={20} /></div>
               ) : notifications.length > 0 ? (
                 notifications.map((n) => (
-                  <div key={n.id} className="p-4 border-b border-border-ui/30 hover:bg-bg-main/40 transition-colors flex gap-4 relative group">
+                  <div key={n.id} className="p-4 border-b border-border-ui/30 hover:bg-bg-main/40 transition-colors flex gap-4 relative">
                     <div className="mt-1 p-2 bg-bg-main rounded-lg h-fit border border-border-ui/50 shrink-0">{n.icon}</div>
                     <div className="flex-1 text-left min-w-0">
-                      <p className="text-[10px] font-black text-text-primary uppercase tracking-tight italic">{n.title}</p>
-                      <p className="text-[11px] text-text-secondary mt-1 leading-relaxed font-medium">{n.desc}</p>
+                      <p className="text-[10px] font-black text-text-primary uppercase italic tracking-tight">{n.title}</p>
+                      <p className="text-[11px] text-text-secondary mt-1 font-medium">{n.desc}</p>
                     </div>
                     <button onClick={() => dismissNotification(n.id)} className="opacity-40 hover:opacity-100 p-1 self-start transition-opacity">
                       <X size={14} className="text-text-secondary hover:text-red-500" />
@@ -173,19 +150,19 @@ const NotificationCenter = () => {
                 ))
               ) : (
                 <div className="p-12 text-center opacity-40">
-                  <CircleAlert size={24} className="mx-auto mb-2 text-text-secondary" />
-                  <p className="text-[9px] font-black uppercase tracking-widest text-text-secondary">Nenhuma notificação</p>
+                  <CircleAlert size={24} className="mx-auto mb-2" />
+                  <p className="text-[9px] font-black uppercase tracking-widest">Nenhum alerta pendente</p>
                 </div>
               )}
             </div>
             
-            {/* BOTÃO PARA PEDIR PERMISSÃO (Caso o usuário ainda não tenha aceito) */}
-            {Notification.permission === 'default' && (
+            {/* CTA para permissão nativa se estiver bloqueado ou padrão */}
+            {Notification.permission !== 'granted' && (
                <button 
-                onClick={() => Notification.requestPermission()}
-                className="w-full p-3 bg-brand/10 text-brand text-[9px] font-black uppercase tracking-widest border-t border-brand/20 hover:bg-brand hover:text-white transition-all"
+                onClick={requestPermission}
+                className="w-full p-4 bg-brand text-white text-[10px] font-black uppercase tracking-[0.2em] hover:opacity-90 transition-all flex items-center justify-center gap-2"
                >
-                 Ativar Notificações Mobile
+                 <Bell size={14} /> Ativar Notificações no Chrome
                </button>
             )}
           </div>

@@ -1,14 +1,17 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   X, DollarSign, TrendingUp, Briefcase, Receipt, Check, Loader2, 
-  BarChart4, Landmark, Bitcoin, PieChart, Calendar, Calculator
+  BarChart4, Landmark, Bitcoin, PieChart, Calendar, Calculator, RefreshCw
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAlert } from '../../context/AlertContext';
+import { debounce } from 'lodash'; // Recomendado instalar: npm install lodash
 
 const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => {
   const { showAlert } = useAlert();
   const [loading, setLoading] = useState(false);
+  const [fetchingPrice, setFetchingPrice] = useState(false);
+  const [marketPrice, setMarketPrice] = useState(null);
 
   const initialState = {
     name: '',
@@ -23,14 +26,45 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
 
   const [formData, setFormData] = useState(initialState);
 
-  // Lógica de Visibilidade
   const isFixedIncome = formData.type === 'renda fixa';
+  const isVariableIncome = ['acoes', 'fiis', 'criptomoedas'].includes(formData.type);
   const showVencimento = isFixedIncome || formData.type === 'outros';
 
-  // --- LÓGICA DE SIMULAÇÃO ---
+  // --- BUSCA DE PREÇO EM TEMPO REAL (NOVA ROTA) ---
+  const fetchPrice = useCallback(
+    debounce(async (ticker, type) => {
+      if (!ticker || ticker.length < 2 || !isVariableIncome) {
+        setMarketPrice(null);
+        return;
+      }
+
+      setFetchingPrice(true);
+      try {
+        const { data } = await api.get(`/investments/price?ticker=${ticker}&type=${type}`);
+        setMarketPrice(data.price);
+      } catch (err) {
+        console.error("Erro ao buscar cotação:", err.message);
+        setMarketPrice(null);
+      } finally {
+        setFetchingPrice(false);
+      }
+    }, 800),
+    [isVariableIncome]
+  );
+
+  useEffect(() => {
+    fetchPrice(formData.ticker, formData.type);
+  }, [formData.ticker, formData.type, fetchPrice]);
+
+  // --- CÁLCULO DE QUANTIDADE ESTIMADA ---
+  const estimatedQuantity = useMemo(() => {
+    if (!marketPrice || !formData.amountInvested || isFixedIncome) return null;
+    return (parseFloat(formData.amountInvested) / marketPrice).toFixed(8);
+  }, [marketPrice, formData.amountInvested, isFixedIncome]);
+
+  // --- LÓGICA DE SIMULAÇÃO (RENDA FIXA) ---
   const simulation = useMemo(() => {
     const { amountInvested, expectedProfitability, startDate, endDate } = formData;
-    
     if (!isFixedIncome || !amountInvested || !expectedProfitability || !endDate) return null;
 
     const principal = parseFloat(amountInvested);
@@ -40,19 +74,15 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
 
     if (d2 <= d1) return null;
 
-    // Cálculo de tempo em anos (base 365 dias)
-    const diffEmMs = d2 - d1;
-    const dias = Math.floor(diffEmMs / (1000 * 60 * 60 * 24));
+    const dias = Math.floor((d2 - d1) / (1000 * 60 * 60 * 24));
     const anos = dias / 365;
-
-    // Juros Compostos: M = P * (1 + i)^t
     const montanteBruto = principal * Math.pow((1 + taxaAnual), anos);
     const lucroBruto = montanteBruto - principal;
 
     return {
       total: montanteBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
       lucro: lucroBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-      dias: dias
+      dias
     };
   }, [formData, isFixedIncome]);
 
@@ -65,14 +95,13 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
       document.body.style.overflow = 'unset';
       if (bottomBar) bottomBar.style.display = 'block';
     }
-    return () => {
-      document.body.style.overflow = 'unset';
-      if (bottomBar) bottomBar.style.display = 'block';
-    };
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen) setFormData(initialState);
+    if (!isOpen) {
+      setFormData(initialState);
+      setMarketPrice(null);
+    }
   }, [isOpen]);
 
   const investmentTypes = [
@@ -93,9 +122,9 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
 
       const dataToSend = {
         ...formData,
-        ticker: isFixedIncome ? '' : formData.ticker,
+        ticker: isFixedIncome ? '' : formData.ticker.toUpperCase(),
         amountInvested: Number(formData.amountInvested),
-        quantity: 0, 
+        quantity: 0, // Backend calcula via MarketPrice se for 0
         startDate: selectedStartDate,
         expectedProfitability: showVencimento ? Number(formData.expectedProfitability) : 0,
         endDate: showVencimento ? formData.endDate : null,
@@ -129,7 +158,7 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
             <h2 className="text-xl md:text-2xl font-black text-text-primary italic uppercase tracking-tighter">
               Novo <span className="text-brand">Ativo</span>
             </h2>
-            <p className="text-[9px] md:text-[10px] text-text-secondary font-black uppercase tracking-[0.2em] mt-1 opacity-60">Cálculo Automático por Cota</p>
+            <p className="text-[9px] md:text-[10px] text-text-secondary font-black uppercase tracking-[0.2em] mt-1 opacity-60 italic">Inteligência de Mercado Ativa</p>
           </div>
           <button onClick={onClose} className="p-2 md:p-3 hover:bg-red-500/10 hover:text-red-500 rounded-2xl transition-all text-text-secondary cursor-pointer active:scale-90">
             <X size={20} strokeWidth={3} />
@@ -158,34 +187,44 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
             </div>
           </div>
 
-          {/* Nome / Ticker */}
-          <div className="flex flex-col gap-3">
-            <div className={`grid ${isFixedIncome ? 'grid-cols-1' : 'grid-cols-3'} gap-3`}>
-              <div className={`${isFixedIncome ? 'col-span-1' : 'col-span-2'} space-y-2 text-left`}>
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary ml-2">Nome do Ativo</label>
-                <input 
-                  required type="text" value={formData.name} placeholder={isFixedIncome ? "Ex: CDB Safra 110% CDI" : "Ex: Bitcoin ou Petrobras"}
-                  className="w-full bg-bg-main border border-border-ui rounded-2xl py-4 px-5 text-sm font-black italic outline-none focus:border-brand transition-all text-text-primary shadow-inner"
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                />
-              </div>
-              
-              {!isFixedIncome && (
-                <div className="space-y-2 text-left animate-in zoom-in-95 duration-200">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary ml-2">Ticker</label>
+          {/* Nome e Ticker */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className={`${isFixedIncome ? 'col-span-3' : 'col-span-2'} space-y-2 text-left`}>
+              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary ml-2">Nome do Ativo</label>
+              <input 
+                required type="text" value={formData.name} placeholder={isFixedIncome ? "Ex: CDB Safra 110% CDI" : "Ex: Bitcoin"}
+                className="w-full bg-bg-main border border-border-ui rounded-2xl py-4 px-5 text-sm font-black italic outline-none focus:border-brand transition-all text-text-primary shadow-inner"
+                onChange={(e) => setFormData({...formData, name: e.target.value})}
+              />
+            </div>
+            
+            {!isFixedIncome && (
+              <div className="space-y-2 text-left animate-in zoom-in-95 duration-200">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary ml-2">Ticker</label>
+                <div className="relative">
                   <input 
                     type="text" value={formData.ticker} placeholder="BTC"
                     className="w-full bg-bg-main border border-border-ui rounded-2xl py-4 px-3 text-center text-[10px] font-black uppercase outline-none focus:border-brand transition-all text-text-primary shadow-inner"
                     onChange={(e) => setFormData({...formData, ticker: e.target.value})}
                   />
+                  {fetchingPrice && (
+                    <RefreshCw size={10} className="absolute right-2 top-2 animate-spin text-brand" />
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
-          {/* Valor Investido */}
+          {/* Valor e Quantidade Estimada */}
           <div className="space-y-2 text-left">
-            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary ml-2">Total Investido (Aporte)</label>
+            <div className="flex justify-between items-center px-2">
+              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary">Total Investido (Aporte)</label>
+              {estimatedQuantity > 0 && (
+                <span className="text-[9px] font-black text-brand italic animate-in fade-in slide-in-from-right-2">
+                  ≈ {estimatedQuantity} un.
+                </span>
+              )}
+            </div>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-brand italic">R$</span>
               <input 
@@ -197,7 +236,17 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
             </div>
           </div>
 
-          {/* Data de Início */}
+          {/* Cotação Atual (Preview) */}
+          {marketPrice && isVariableIncome && (
+            <div className="bg-bg-main/50 border border-border-ui/50 rounded-2xl p-3 flex items-center justify-between animate-in fade-in zoom-in-95">
+              <span className="text-[8px] font-black text-text-secondary uppercase tracking-widest px-2">Cotação Atual</span>
+              <span className="text-[10px] font-black text-text-primary italic bg-bg-card px-3 py-1 rounded-lg border border-border-ui">
+                {marketPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </span>
+            </div>
+          )}
+
+          {/* Data da Operação */}
           <div className="space-y-2 text-left">
             <label className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary ml-2">Data da Operação</label>
             <div className="relative">
@@ -238,7 +287,7 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
             </div>
           )}
 
-          {/* --- CAMPO DE SIMULAÇÃO ABAIXO DA RENTABILIDADE --- */}
+          {/* Simulação de Retorno */}
           {simulation && (
             <div className="bg-brand/10 border border-brand/20 rounded-[2rem] p-5 space-y-4 animate-in zoom-in-95 duration-300">
               <div className="flex items-center justify-between border-b border-brand/10 pb-3">
@@ -260,15 +309,9 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
                 </div>
                 <div className="text-right space-y-1">
                   <p className="text-[8px] font-black text-text-secondary uppercase opacity-60">Lucro Estimado</p>
-                  <p className="text-sm font-black text-green-500 italic">
-                    +{simulation.lucro}
-                  </p>
+                  <p className="text-sm font-black text-green-500 italic">+{simulation.lucro}</p>
                 </div>
               </div>
-
-              <p className="text-[7px] font-bold text-text-secondary uppercase opacity-40 leading-tight">
-                * Simulação baseada em juros compostos anuais sobre dias corridos. Valores sem considerar impostos.
-              </p>
             </div>
           )}
 

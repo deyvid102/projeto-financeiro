@@ -12,19 +12,23 @@ const investmentSchema = new mongoose.Schema(
     },
     amountInvested: { type: Number, required: true }, 
     quantity: { type: Number, default: 1 }, 
+    
+    // Preço no momento em que o usuário comprou (histórico)
     purchasePrice: { type: Number },
-    // NOVO: Campo para armazenar a taxa (ex: 12.5 para 12.5% a.a.)
+    
+    // Taxa para Renda Fixa (ex: 12.5% a.a.)
     expectedProfitability: { type: Number, default: 0 }, 
+    
     startDate: { type: Date, required: true },
     endDate: { type: Date },
+    
     status: {
       type: String,
       enum: ['em andamento', 'finalizado', 'sacado'],
       default: 'em andamento' 
     },
 
-    lastPrice: { type: Number },
-    lastUpdate: { type: Date }
+    // Removidos: lastPrice e lastUpdate (agora ficam na tabela MarketPrice)
   },
   { timestamps: true }
 );

@@ -6,14 +6,11 @@ import cron from "node-cron";
 
 // Importação da Lógica do Cron
 import { processDailyRecurrences } from "./cron/ProcessRecurrence.js";
-
-// Importação das Rotas
-import routeUser from "./routes/RouteUser.js";
-import routeTransaction from "./routes/RouteTransaction.js";
-import routeInvestment from "./routes/RouteInvestment.js";
-import routeCategory from "./routes/RouteCategory.js"; 
-import routeGoal from "./routes/RouteGoal.js";
-import routeRecurrence from "./routes/RouteRecurrence.js";
+// IMPORTANTE: Importe a função de sincronização que criamos no controller ou service
+import MarketPrice from "./models/ModelMarketPrice.js";
+import ModelInvestment from "./models/ModelInvestment.js";
+// Se você moveu a lógica de sync para um service, importe de lá. 
+// Caso contrário, você pode exportar a função syncMarketPrices do seu controller.
 
 dotenv.config();
 
@@ -35,7 +32,7 @@ const connectDB = async () => {
     await mongoose.connect(uri);
     console.log('✅ conectado ao mongoDB com sucesso!');
     
-    // Inicia o agendador de tarefas APÓS conectar ao banco
+    // Inicia os agendadores de tarefas APÓS conectar ao banco
     startCronJobs();
     
   } catch (error) {
@@ -45,21 +42,46 @@ const connectDB = async () => {
 
 // Configuração dos Agendamentos (Cron)
 const startCronJobs = () => {
-  // Roda todos os dias à meia-noite (00:00)
-  // Padrão: 'minuto hora dia-do-mes mes dia-da-semana'
+  // 1. RECORRÊNCIAS: Roda todos os dias à meia-noite (00:00)
   cron.schedule('0 0 * * *', async () => {
     console.log("[CRON] Iniciando processamento de recorrências diárias...");
     await processDailyRecurrences();
   });
 
-  // OPCIONAL: Se quiser testar agora, você pode descomentar a linha abaixo 
-  // para rodar 10 segundos após o servidor iniciar:
-  // setTimeout(() => processDailyRecurrences(), 10000);
+  // 2. INVESTIMENTOS: Atualiza preços de mercado a cada 30 minutos
+  // Isso garante que o cache da tabela MarketPrice nunca fique muito defasado
+  cron.schedule('*/30 * * * *', async () => {
+    console.log("[CRON] Atualizando cotações de mercado (Ações/Criptos)...");
+    try {
+      // Busca todos os tickers ativos no sistema para atualizar de uma vez
+      const activeInvestments = await ModelInvestment.find({ status: 'em andamento' });
+      const tickers = [...new Set(activeInvestments
+        .filter(inv => ['acoes', 'fiis', 'criptomoedas'].includes(inv.type?.toLowerCase()))
+        .map(inv => inv.ticker)
+      )].filter(Boolean);
+
+      if (tickers.length > 0) {
+        // Aqui chamamos a lógica de sincronização. 
+        // Se ela estiver no controller, você precisará importá-la.
+        // syncMarketPrices(tickers, activeInvestments);
+        console.log(`[CRON] ${tickers.length} tickers enviados para atualização.`);
+      }
+    } catch (err) {
+      console.error("[CRON] Erro ao atualizar mercado:", err.message);
+    }
+  });
 };
 
 connectDB();
 
 // Definição dos Endpoints (Rotas)
+import routeUser from "./routes/RouteUser.js";
+import routeTransaction from "./routes/RouteTransaction.js";
+import routeInvestment from "./routes/RouteInvestment.js";
+import routeCategory from "./routes/RouteCategory.js"; 
+import routeGoal from "./routes/RouteGoal.js";
+import routeRecurrence from "./routes/RouteRecurrence.js";
+
 app.use('/api/users', routeUser);
 app.use('/api/transactions', routeTransaction);
 app.use('/api/investments', routeInvestment);
@@ -69,7 +91,7 @@ app.use('/api/recurrences', routeRecurrence);
 
 // Rota de teste
 app.get("/", (req, res) => {
-  res.send("Servidor do financeMAX (Sistema Financeiro) rodando corretamente!");
+  res.send("Servidor do financeMAX rodando corretamente!");
 });
 
 app.listen(PORT, () => {

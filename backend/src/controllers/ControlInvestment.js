@@ -1,90 +1,86 @@
 import ModelInvestment from '../models/ModelInvestment.js';
 import Transaction from '../models/ModelTransaction.js';
+import MarketPrice from '../models/ModelMarketPrice.js';
 import axios from 'axios';
 
-// --- FUNÇÃO AUXILIAR COM CACHE E BATCHING ---
-const fetchMarketPrices = async (investments) => {
+// --- FUNÇÃO AUXILIAR DE SINCRONIZAÇÃO (CACHE CENTRALIZADO) ---
+// Esta função é interna e lida com a lógica de bater nas APIs e salvar no banco
+const syncMarketPrices = async (tickers, investments) => {
   const now = new Date();
-  const CACHE_TIME = 6 * 60 * 60 * 1000; // 6 horas
+  const CACHE_TIME = 30 * 60 * 1000; // 30 minutos
 
-  // 1. Separar ativos que precisam de atualização externa e estão com cache vencido
-  const needsUpdate = investments.filter(inv => {
-    const type = inv.type?.toLowerCase();
-    const isMarketAsset = ['criptomoedas', 'acoes', 'fiis'].includes(type);
-    const isExpired = !inv.lastUpdate || (now - new Date(inv.lastUpdate)) > CACHE_TIME;
-    return isMarketAsset && inv.ticker && isExpired;
+  const existingPrices = await MarketPrice.find({ ticker: { $in: tickers } });
+  
+  const tickersToUpdate = tickers.filter(t => {
+    const found = existingPrices.find(p => p.ticker === t);
+    return !found || (now - new Date(found.lastUpdate)) > CACHE_TIME;
   });
 
-  const pricesMap = {};
-
-  // 2. Se houver ativos vencidos, busca nas APIs em lote
-  if (needsUpdate.length > 0) {
+  if (tickersToUpdate.length > 0) {
     try {
+      const pricesMap = {};
+      
+      const cryptoTickers = tickersToUpdate.filter(t => 
+        investments.find(inv => inv.ticker === t && inv.type?.toLowerCase() === 'criptomoedas')
+      );
+      const stockTickers = tickersToUpdate.filter(t => !cryptoTickers.includes(t));
+
       // BATCH CRIPTO (CoinGecko)
-      const cryptoAssets = needsUpdate.filter(inv => inv.type?.toLowerCase() === 'criptomoedas');
-      if (cryptoAssets.length > 0) {
-        const ids = cryptoAssets.map(inv => {
-          const t = inv.ticker.toLowerCase();
-          return t === 'btc' ? 'bitcoin' : t === 'eth' ? 'ethereum' : t;
+      if (cryptoTickers.length > 0) {
+        const ids = cryptoTickers.map(t => {
+          const lower = t.toLowerCase();
+          return lower === 'btc' ? 'bitcoin' : lower === 'eth' ? 'ethereum' : lower;
         }).join(',');
+        
         const { data } = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=brl`);
-        Object.keys(data).forEach(id => { pricesMap[id] = data[id].brl; });
+        
+        Object.keys(data).forEach(id => {
+          const tickerOriginal = id === 'bitcoin' ? 'BTC' : id === 'ethereum' ? 'ETH' : id.toUpperCase();
+          pricesMap[tickerOriginal] = data[id].brl;
+        });
       }
 
       // BATCH AÇÕES/FIIS (Brapi)
-      const stockAssets = needsUpdate.filter(inv => ['acoes', 'fiis'].includes(inv.type?.toLowerCase()));
-      if (stockAssets.length > 0) {
-        const tickers = stockAssets.map(inv => inv.ticker.toUpperCase()).join(',');
-        const { data } = await axios.get(`https://brapi.dev/api/quote/${tickers}`);
-        data.results?.forEach(res => { pricesMap[res.symbol.toUpperCase()] = res.regularMarketPrice; });
+      if (stockTickers.length > 0) {
+        const tickersString = stockTickers.join(',');
+        const { data } = await axios.get(`https://brapi.dev/api/quote/${tickersString}`);
+        data.results?.forEach(res => { 
+          pricesMap[res.symbol.toUpperCase()] = res.regularMarketPrice; 
+        });
       }
 
-      // SALVAR NO BANCO (Atualiza o cache para a próxima vez)
-      await Promise.all(needsUpdate.map(async (inv) => {
-        const type = inv.type?.toLowerCase();
-        const tickerKey = type === 'criptomoedas' 
-          ? (inv.ticker.toLowerCase() === 'btc' ? 'bitcoin' : inv.ticker.toLowerCase() === 'eth' ? 'ethereum' : inv.ticker.toLowerCase())
-          : inv.ticker.toUpperCase();
-
-        if (pricesMap[tickerKey]) {
-          inv.lastPrice = pricesMap[tickerKey];
-          inv.lastUpdate = now;
-          await inv.save();
-        }
-      }));
+      const updatePromises = Object.keys(pricesMap).map(ticker => 
+        MarketPrice.findOneAndUpdate(
+          { ticker },
+          { price: pricesMap[ticker], lastUpdate: now },
+          { upsert: true, new: true }
+        )
+      );
+      
+      await Promise.all(updatePromises);
     } catch (err) {
-      console.error("Erro ao atualizar APIs (usando valores antigos):", err.message);
+      console.error("Erro ao sincronizar preços de mercado:", err.message);
     }
   }
-
-  // 3. Processamento Final para o Front-end
-  return investments.map((inv) => {
-    let currentUnitValue = inv.lastPrice || inv.purchasePrice || (inv.amountInvested / (inv.quantity || 1));
-    const type = inv.type?.toLowerCase();
-
-    // Renda Fixa (Cálculo matemático local, sem API)
-    if (type === 'renda fixa' && inv.startDate && inv.endDate) {
-      const start = new Date(inv.startDate);
-      const end = new Date(inv.endDate);
-      const progressFactor = Math.max(0, Math.min((now - start) / (end - start), 1));
-      const totalProfitRate = Number(inv.expectedProfitability || 0) / 100;
-      const accruedProfitRate = totalProfitRate * progressFactor;
-      currentUnitValue = (inv.amountInvested * (1 + accruedProfitRate)) / (inv.quantity || 1);
-    }
-
-    const obj = inv.toObject({ virtuals: true });
-    obj.currentUnitValue = parseFloat(Number(currentUnitValue).toFixed(8));
-    obj.currentTotalValue = parseFloat((currentUnitValue * (inv.quantity || 0)).toFixed(2));
-    obj.totalProfit = parseFloat((obj.currentTotalValue - inv.amountInvested).toFixed(2));
-    obj.profitPercentage = inv.amountInvested > 0 
-      ? parseFloat(((obj.totalProfit / inv.amountInvested) * 100).toFixed(2)) 
-      : 0;
-    
-    return obj;
-  });
 };
 
 // --- CONTROLLERS ---
+
+// Busca preço individual para o frontend
+export const getTickerPrice = async (req, res) => {
+  try {
+    const { ticker, type } = req.query;
+    if (!ticker) return res.status(400).json({ message: "Ticker é obrigatório" });
+    
+    const tickerUpper = ticker.toUpperCase();
+    await syncMarketPrices([tickerUpper], [{ ticker: tickerUpper, type }]);
+    
+    const priceData = await MarketPrice.findOne({ ticker: tickerUpper });
+    res.json({ price: priceData?.price || 0 });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
 
 export const createInvestment = async (req, res) => {
   try {
@@ -95,25 +91,18 @@ export const createInvestment = async (req, res) => {
     
     const investmentAmount = Number(amountInvested);
     let investmentQuantity = Number(quantity);
-    const typeLower = type?.toLowerCase();
+    const tickerUpper = ticker?.toUpperCase();
 
-    // Busca preço inicial apenas se não houver quantidade informada
-    if ((!investmentQuantity || investmentQuantity <= 0) && ticker) {
+    if ((!investmentQuantity || investmentQuantity <= 0) && tickerUpper) {
       try {
-        let marketPriceNow = 0;
-        if (typeLower === 'criptomoedas') {
-          const coinId = ticker.toLowerCase() === 'btc' ? 'bitcoin' : 
-                         ticker.toLowerCase() === 'eth' ? 'ethereum' : ticker.toLowerCase();
-          const { data } = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=brl`);
-          marketPriceNow = data[coinId]?.brl;
-        } 
-        else if (typeLower === 'acoes' || typeLower === 'fiis') {
-          const { data } = await axios.get(`https://brapi.dev/api/quote/${ticker.toUpperCase()}`);
-          marketPriceNow = data.results?.[0]?.regularMarketPrice;
+        await syncMarketPrices([tickerUpper], [{ ticker: tickerUpper, type }]);
+        const priceData = await MarketPrice.findOne({ ticker: tickerUpper });
+
+        if (priceData && priceData.price > 0) {
+          investmentQuantity = investmentAmount / priceData.price;
         }
-        if (marketPriceNow > 0) investmentQuantity = investmentAmount / marketPriceNow;
       } catch (e) {
-        console.error("Erro na cotação inicial:", e.message);
+        console.error("Erro no cálculo automático de quantidade:", e.message);
       }
     }
 
@@ -122,7 +111,7 @@ export const createInvestment = async (req, res) => {
     const newInvestment = await ModelInvestment.create({
       user: req.user.id,
       name,
-      ticker: ticker?.toUpperCase(),
+      ticker: tickerUpper,
       type,
       amountInvested: investmentAmount,
       quantity: investmentQuantity,
@@ -130,21 +119,20 @@ export const createInvestment = async (req, res) => {
       expectedProfitability: Number(expectedProfitability) || 0,
       startDate: startDate || new Date(),
       endDate,
-      status: 'em andamento',
-      lastPrice: investmentAmount / investmentQuantity, // Inicia o cache com o preço de compra
-      lastUpdate: new Date()
+      status: 'em andamento'
     });
 
     if (addAsTransaction) {
       await Transaction.create({
         user: req.user.id,
-        title: `Aporte: ${ticker || name}`, 
+        title: `Aporte: ${tickerUpper || name}`, 
         amount: investmentAmount,
         type: 'saida',
         category: 'Investimento',
         date: startDate || new Date()
       });
     }
+    
     res.status(201).json(newInvestment);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -156,10 +144,46 @@ export const getInvestments = async (req, res) => {
     const allInvestments = await ModelInvestment.find({ user: req.user.id }).sort({ startDate: -1 });
     const activeOnes = allInvestments.filter(inv => inv.status === 'em andamento');
     const finishedOnes = allInvestments.filter(inv => inv.status !== 'em andamento');
-    
-    const liveActiveInvestments = await fetchMarketPrices(activeOnes);
+
+    const tickers = [...new Set(activeOnes
+      .filter(inv => ['acoes', 'fiis', 'criptomoedas'].includes(inv.type?.toLowerCase()))
+      .map(inv => inv.ticker)
+    )].filter(Boolean);
+
+    if (tickers.length > 0) {
+      await syncMarketPrices(tickers, activeOnes);
+    }
+
+    const marketPrices = await MarketPrice.find({ ticker: { $in: tickers } });
+    const priceMap = {};
+    marketPrices.forEach(p => { priceMap[p.ticker] = p.price; });
+
+    const now = new Date();
+    const liveActiveInvestments = activeOnes.map(inv => {
+      let currentUnitValue = priceMap[inv.ticker] || inv.purchasePrice || (inv.amountInvested / (inv.quantity || 1));
+      const type = inv.type?.toLowerCase();
+
+      if (type === 'renda fixa' && inv.startDate && inv.endDate) {
+        const start = new Date(inv.startDate);
+        const end = new Date(inv.endDate);
+        const progressFactor = Math.max(0, Math.min((now - start) / (end - start), 1));
+        const totalProfitRate = Number(inv.expectedProfitability || 0) / 100;
+        const accruedProfitRate = totalProfitRate * progressFactor;
+        currentUnitValue = (inv.amountInvested * (1 + accruedProfitRate)) / (inv.quantity || 1);
+      }
+
+      const obj = inv.toObject({ virtuals: true });
+      obj.currentUnitValue = parseFloat(Number(currentUnitValue).toFixed(8));
+      obj.currentTotalValue = parseFloat((currentUnitValue * (inv.quantity || 0)).toFixed(2));
+      obj.totalProfit = parseFloat((obj.currentTotalValue - inv.amountInvested).toFixed(2));
+      obj.profitPercentage = inv.amountInvested > 0 
+        ? parseFloat(((obj.totalProfit / inv.amountInvested) * 100).toFixed(2)) 
+        : 0;
+      
+      return obj;
+    });
+
     const formattedFinished = finishedOnes.map(inv => inv.toObject({ virtuals: true }));
-    
     res.json([...liveActiveInvestments, ...formattedFinished]);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -170,14 +194,18 @@ export const updateInvestmentValue = async (req, res) => {
   try {
     const investment = await ModelInvestment.findByIdAndUpdate(req.params.id, req.body, { new: true });
     res.json(investment);
-  } catch (error) { res.status(500).json({ message: error.message }); }
+  } catch (error) { 
+    res.status(500).json({ message: error.message }); 
+  }
 };
 
 export const deleteInvestment = async (req, res) => {
   try {
     await ModelInvestment.findByIdAndDelete(req.params.id);
     res.json({ message: 'Ativo removido com sucesso' });
-  } catch (error) { res.status(500).json({ message: error.message }); }
+  } catch (error) { 
+    res.status(500).json({ message: error.message }); 
+  }
 };
 
 export const liquidateInvestment = async (req, res) => {
@@ -186,8 +214,28 @@ export const liquidateInvestment = async (req, res) => {
     const investment = await ModelInvestment.findById(req.params.id);
     if (!investment) return res.status(404).json({ message: 'Investimento não encontrado' });
 
-    const [calculatedInv] = await fetchMarketPrices([investment]);
-    const finalValue = sellPrice || calculatedInv.currentTotalValue;
+    let finalValue = sellPrice;
+
+    if (!finalValue) {
+      const type = investment.type?.toLowerCase();
+      let currentUnitValue = investment.purchasePrice || (investment.amountInvested / (investment.quantity || 1));
+      const now = new Date();
+
+      if (['acoes', 'fiis', 'criptomoedas'].includes(type) && investment.ticker) {
+        await syncMarketPrices([investment.ticker], [investment]);
+        const marketData = await MarketPrice.findOne({ ticker: investment.ticker });
+        if (marketData && marketData.price) currentUnitValue = marketData.price;
+      } else if (type === 'renda fixa' && investment.startDate && investment.endDate) {
+        const start = new Date(investment.startDate);
+        const end = new Date(investment.endDate);
+        const progressFactor = Math.max(0, Math.min((now - start) / (end - start), 1));
+        const totalProfitRate = Number(investment.expectedProfitability || 0) / 100;
+        const accruedProfitRate = totalProfitRate * progressFactor;
+        currentUnitValue = (investment.amountInvested * (1 + accruedProfitRate)) / (investment.quantity || 1);
+      }
+      
+      finalValue = parseFloat((currentUnitValue * (investment.quantity || 0)).toFixed(2));
+    }
 
     investment.status = 'sacado';
     investment.sellPrice = finalValue; 
@@ -203,6 +251,9 @@ export const liquidateInvestment = async (req, res) => {
         date: new Date()
       });
     }
+    
     res.json(investment);
-  } catch (error) { res.status(500).json({ message: error.message }); }
+  } catch (error) { 
+    res.status(500).json({ message: error.message }); 
+  }
 };

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 
 const SelectStyle = ({ 
@@ -11,12 +12,38 @@ const SelectStyle = ({
   name
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
   const dropdownRef = useRef(null);
+  const buttonRef = useRef(null);
 
-  // Fecha o dropdown se clicar fora dele
+  // Calcula a posição do botão para alinhar a lista flutuante
+  const updateCoords = () => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setCoords({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      updateCoords();
+      window.addEventListener('scroll', updateCoords);
+      window.addEventListener('resize', updateCoords);
+    }
+    return () => {
+      window.removeEventListener('scroll', updateCoords);
+      window.removeEventListener('resize', updateCoords);
+    };
+  }, [isOpen]);
+
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target) && 
+          buttonRef.current && !buttonRef.current.contains(event.target)) {
         setIsOpen(false);
       }
     };
@@ -25,16 +52,14 @@ const SelectStyle = ({
   }, []);
 
   const handleSelect = (optionValue) => {
-    // Simulamos o evento que o seu formulário espera
     onChange({ target: { name, value: optionValue } });
     setIsOpen(false);
   };
 
-  // Encontra o selo/label da opção selecionada para mostrar no botão
   const selectedOption = options.find(opt => (opt.value || opt.name) === value);
 
   return (
-    <div className="space-y-1 w-full relative" ref={dropdownRef}>
+    <div className="space-y-1 w-full relative">
       {label && (
         <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest ml-4">
           {label}
@@ -42,8 +67,8 @@ const SelectStyle = ({
       )}
       
       <div className="relative">
-        {/* Botão que abre o Select */}
         <button
+          ref={buttonRef}
           type="button"
           onClick={() => setIsOpen(!isOpen)}
           className={`
@@ -53,7 +78,6 @@ const SelectStyle = ({
             ${Icon ? 'pl-14' : 'pl-6'} pr-12
           `}
         >
-          {/* Ícone Lateral */}
           {Icon && (
             <div className={`absolute left-5 top-1/2 -translate-y-1/2 transition-all ${isOpen ? 'text-brand opacity-100' : 'text-text-secondary opacity-30'}`}>
               <Icon size={18} />
@@ -64,18 +88,25 @@ const SelectStyle = ({
             {selectedOption ? (selectedOption.label || selectedOption.name) : placeholder}
           </span>
 
-          {/* Seta */}
           <div className={`absolute right-5 top-1/2 -translate-y-1/2 text-text-secondary opacity-40 transition-transform duration-300 ${isOpen ? 'rotate-180 text-brand opacity-100' : ''}`}>
             <ChevronDown size={18} />
           </div>
         </button>
 
-        {/* Lista de Opções Customizada */}
-        {isOpen && (
-          <div className="absolute z-[100] w-full mt-2 bg-bg-card border border-border-ui/50 rounded-[1.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        {/* Portal: Joga a lista para fora do Modal (no final do body) */}
+        {isOpen && createPortal(
+          <div 
+            ref={dropdownRef}
+            className="fixed z-[9999] bg-bg-card border border-border-ui/50 rounded-[1.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            style={{ 
+              top: `${coords.top + 8}px`, 
+              left: `${coords.left}px`, 
+              width: `${coords.width}px` 
+            }}
+          >
             <div className="max-h-60 overflow-y-auto custom-scrollbar">
               {options.length === 0 ? (
-                <div className="p-4 text-xs text-text-secondary text-center italic">Nenhuma categoria encontrada</div>
+                <div className="p-4 text-xs text-text-secondary text-center italic">Nenhuma opção encontrada</div>
               ) : (
                 options.map((option, idx) => (
                   <button
@@ -94,7 +125,8 @@ const SelectStyle = ({
                 ))
               )}
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </div>

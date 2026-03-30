@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Wallet, ArrowUpCircle, ArrowDownCircle, 
-  Calendar, TrendingUp, PieChart as PieIcon, BarChart3 
+  Calendar, TrendingUp, PieChart as PieIcon, BarChart3, CreditCard
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -41,21 +41,25 @@ const DashPanel = () => {
   const [transactions, setTransactions] = useState([]);
   const [investments, setInvestments] = useState([]);
   const [summary, setSummary] = useState({ balance: 0, income: 0, expense: 0, totalProfit: 0 });
+  const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [timeFilter, setTimeFilter] = useState('anual');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [transRes, invRes] = await Promise.all([
+        const [transRes, invRes, cardsRes] = await Promise.all([
           api.get('/transactions'),
-          api.get('/investments')
+          api.get('/investments'),
+          api.get('/cards')
         ]);
         const transData = transRes.data || [];
         const invData = invRes.data || [];
+        const cardsData = cardsRes.data || [];
         
         setTransactions([...transData].sort((a, b) => new Date(b.date) - new Date(a.date)));
         setInvestments(invData);
+        setCards(cardsData);
         
         // Fluxo de caixa
         const income = transData.filter(t => t.type === 'entrada').reduce((acc, curr) => acc + Number(curr.amount), 0);
@@ -129,6 +133,13 @@ const DashPanel = () => {
   }, [investments]);
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+  const cardMetrics = useMemo(() => {
+    const creditCards = cards.filter((c) => c.type === 'credito');
+    const totalLimit = creditCards.reduce((acc, c) => acc + Number(c.creditLimit || 0), 0);
+    const usedLimit = creditCards.reduce((acc, c) => acc + Number(c.usedLimit || 0), 0);
+    const vaBalance = cards.filter((c) => c.type === 'vale_alimentacao').reduce((acc, c) => acc + Number(c.vaBalance || 0), 0);
+    return { totalCards: cards.length, totalLimit, usedLimit, availableLimit: totalLimit - usedLimit, vaBalance };
+  }, [cards]);
 
   if (loading) return <LoadingState />;
 
@@ -182,6 +193,35 @@ const DashPanel = () => {
 
       {/* 2. GRID DE GRÁFICOS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8 mb-8">
+        <div className="bg-bg-card border border-border-ui rounded-[2rem] md:rounded-[3rem] p-5 md:p-8 shadow-sm lg:col-span-2">
+          <h3 className="text-[10px] md:text-sm font-black text-text-primary uppercase tracking-widest italic mb-6 flex items-center gap-2">
+            <CreditCard size={16} className="text-brand" /> Panorama de Cartões
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="p-4 rounded-2xl bg-bg-main/20 border border-border-ui/30">
+              <p className="text-[8px] font-black uppercase text-text-secondary">Ativos</p>
+              <p className="text-2xl font-black italic text-brand mt-1">{cardMetrics.totalCards}</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-bg-main/20 border border-border-ui/30">
+              <p className="text-[8px] font-black uppercase text-text-secondary">Limite total</p>
+              <p className="text-sm font-black italic text-text-primary mt-2">
+                {cardMetrics.totalLimit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </p>
+            </div>
+            <div className="p-4 rounded-2xl bg-bg-main/20 border border-border-ui/30">
+              <p className="text-[8px] font-black uppercase text-text-secondary">Limite disponível</p>
+              <p className="text-sm font-black italic text-green-500 mt-2">
+                {cardMetrics.availableLimit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </p>
+            </div>
+            <div className="p-4 rounded-2xl bg-bg-main/20 border border-border-ui/30">
+              <p className="text-[8px] font-black uppercase text-text-secondary">Saldo VA</p>
+              <p className="text-sm font-black italic text-brand mt-2">
+                {cardMetrics.vaBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </p>
+            </div>
+          </div>
+        </div>
         
         {/* GRÁFICO 1: FLUXO DE CAIXA */}
         <div className="bg-bg-card border border-border-ui rounded-[2rem] md:rounded-[3rem] p-5 md:p-8 shadow-sm">
@@ -298,23 +338,6 @@ const DashPanel = () => {
       <div className="bg-bg-card border border-border-ui rounded-[2rem] md:rounded-[3rem] p-5 md:p-8 shadow-sm overflow-hidden">
         <h3 className="text-lg md:text-2xl font-black text-text-primary italic tracking-tighter mb-6">Histórico <span className="text-brand">Recente</span></h3>
         
-        <div className="flex flex-col gap-3 md:hidden">
-          {transactions.slice(0, 5).map((t) => (
-            <div key={t._id} className="p-4 bg-bg-main/30 border border-border-ui/50 rounded-2xl flex items-center justify-between">
-              <div className="flex flex-col gap-1 max-w-[60%]">
-                <span className="text-[9px] font-black uppercase text-text-secondary/70 tracking-tighter truncate">{t.category}</span>
-                <span className="text-sm font-bold text-text-primary truncate">{t.title}</span>
-                <span className="text-[8px] font-medium text-text-secondary flex items-center gap-1">
-                  <Calendar size={10} /> {new Date(t.date).toLocaleDateString('pt-BR')}
-                </span>
-              </div>
-              <div className={`text-right font-black italic text-sm ${t.type === 'entrada' ? 'text-green-500' : 'text-red-500'}`}>
-                {t.type === 'entrada' ? '+' : '-'} {Number(t.amount).toLocaleString('pt-br', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
-              </div>
-            </div>
-          ))}
-        </div>
-
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-separate border-spacing-y-3">
             <thead>
@@ -342,6 +365,26 @@ const DashPanel = () => {
               ))}
             </tbody>
           </table>
+        </div>
+
+        <div className="md:hidden flex flex-col gap-3">
+          {transactions.slice(0, 5).map((t) => (
+            <div key={t._id} className="p-4 bg-bg-main/30 border border-border-ui/50 rounded-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase text-text-primary truncate">{t.title}</p>
+                  <p className="text-[8px] font-bold text-text-secondary uppercase mt-1">{t.category}</p>
+                </div>
+                <p className={`text-[10px] font-black italic shrink-0 ${t.type === 'entrada' ? 'text-green-500' : 'text-red-500'}`}>
+                  {t.type === 'entrada' ? '+ ' : '- '}
+                  {Number(t.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </p>
+              </div>
+              {t.card?.name && (
+                <p className="mt-2 text-[8px] font-black uppercase text-brand">Cartão: {t.card.name}</p>
+              )}
+            </div>
+          ))}
         </div>
       </div>
     </div>

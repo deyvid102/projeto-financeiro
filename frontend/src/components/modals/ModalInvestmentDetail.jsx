@@ -6,10 +6,12 @@ import {
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import api from '@/services/api';
 import { useAlert } from '../../context/AlertContext';
+import ModalConfirm from './ModalConfirm';
 
 const ModalInvestmentDetail = ({ isOpen, investment, onClose, onRefresh }) => {
   const { showAlert } = useAlert();
   const [isLiquidating, setIsLiquidating] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   // --- MOVIDO PARA CIMA DO "IF" ---
   const chartData = useMemo(() => {
@@ -43,8 +45,6 @@ const ModalInvestmentDetail = ({ isOpen, investment, onClose, onRefresh }) => {
 
   // --- FUNÇÃO DE LIQUIDAÇÃO ---
   const handleLiquidate = async () => {
-    if (!window.confirm(`Deseja realmente liquidar (vender) ${investment.ticker || investment.name}?`)) return;
-    
     setIsLiquidating(true);
     try {
       await api.put(`/investments/${investment._id}/liquidate`, {
@@ -59,6 +59,7 @@ const ModalInvestmentDetail = ({ isOpen, investment, onClose, onRefresh }) => {
       showAlert(err.response?.data?.message || 'Erro ao liquidar ativo', 'error');
     } finally {
       setIsLiquidating(false);
+      setIsConfirmOpen(false);
     }
   };
 
@@ -178,7 +179,7 @@ const ModalInvestmentDetail = ({ isOpen, investment, onClose, onRefresh }) => {
           {/* BOTÃO DE LIQUIDAÇÃO (NOVO) */}
           <div className="pt-4">
             <button
-              onClick={handleLiquidate}
+              onClick={() => setIsConfirmOpen(true)}
               disabled={isLiquidating}
               className="w-full group relative overflow-hidden bg-bg-main border border-border-ui hover:border-brand/50 py-6 rounded-[2rem] transition-all flex items-center justify-center gap-3 cursor-pointer active:scale-[0.98]"
             >
@@ -198,6 +199,16 @@ const ModalInvestmentDetail = ({ isOpen, investment, onClose, onRefresh }) => {
           </div>
         </div>
       </div>
+
+      <ModalConfirm
+        isOpen={isConfirmOpen}
+        onClose={() => setIsConfirmOpen(false)}
+        onConfirm={handleLiquidate}
+        title="Liquidar ativo"
+        message={`Deseja realmente liquidar (vender) ${investment.ticker || investment.name}?`}
+        loading={isLiquidating}
+        variant="danger"
+      />
     </div>
   );
 };

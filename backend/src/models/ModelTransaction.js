@@ -15,6 +15,7 @@ const transactionSchema = new mongoose.Schema(
     amount: {
       type: Number,
       required: [true, 'O valor é obrigatório'],
+      min: [0.01, 'O valor deve ser maior que zero'],
     },
     type: {
       type: String,
@@ -29,32 +30,57 @@ const transactionSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
-    // Vínculo com a Meta
+
+    // ── Vínculo com Meta (Caixinha) ──
     goal: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Goal',
-      required: false,
+      default: null,
     },
+
+    // ── Vínculo com Cartão ──
+    // Presente em: débito, VA, compras de crédito (card_bill) e pagamento de fatura (bill_payment)
+    card: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Card',
+      default: null,
+    },
+
+    // ── Origem da Transação ──
+    // manual        → criada diretamente pelo usuário (débito, VA, sem cartão)
+    // recurrence    → gerada por uma regra de recorrência comum ou meta
+    // card_bill     → gerada automaticamente no dia de fechamento do cartão de crédito
+    // va_purchase   → compra debitada do saldo do Vale Alimentação
+    // va_recharge   → recarga mensal do VA (gerada pela recorrência de recarga)
+    // bill_payment  → pagamento de fatura do cartão de crédito
+    transactionOrigin: {
+      type: String,
+      enum: ['manual', 'recurrence', 'card_bill', 'va_purchase', 'va_recharge', 'bill_payment'],
+      default: 'manual',
+    },
+
+    // ── Vínculo com Recorrência ──
     isRecurring: {
       type: Boolean,
-      default: false
+      default: false,
     },
     recurrenceId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Recurrence',
-      default: null
+      default: null,
     },
     installmentNumber: {
       type: Number,
-      default: null
-    }
+      default: null,
+    },
   },
-  { 
-    timestamps: true 
+  {
+    timestamps: true,
   }
 );
 
 transactionSchema.index({ user: 1, date: -1 });
+transactionSchema.index({ user: 1, card: 1, date: -1 });
 
 const Transaction = mongoose.model('Transaction', transactionSchema);
 export default Transaction;

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Tag, Plus, ArrowUpCircle, ArrowDownCircle, 
   SlidersHorizontal, ChevronLeft, ChevronRight, 
-  X, RotateCcw, Calendar, Repeat
+  X, RotateCcw, Calendar, Repeat, CreditCard, Eye, CalendarClock, Wallet, Loader2
 } from 'lucide-react';
 import { FiEdit2, FiTrash2 } from 'react-icons/fi';
 
@@ -13,6 +13,7 @@ import ModalConfirm from "@/components/modals/ModalConfirm";
 import ModalTransactions from "@/components/modals/ModalTransactions";
 import ModalCategory from "@/components/modals/ModalCategory";
 import ModalRecurrence from "@/components/modals/ModalRecurrence";
+import ModalCard from "@/components/modals/ModalCard";
 import FilterSidebar from "@/components/FilterSidebar";
 import LoadingState from '@/components/LoadingState';
 
@@ -43,6 +44,12 @@ const TransactionsPanel = () => {
   const [transactionToEdit, setTransactionToEdit] = useState(null);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [cards, setCards] = useState([]);
+  const [activeTab, setActiveTab] = useState('transactions');
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+  const [detailCard, setDetailCard] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailData, setDetailData] = useState(null);
 
   const fetchTransactions = async () => {
     try {
@@ -57,8 +64,85 @@ const TransactionsPanel = () => {
     }
   };
 
+  const fetchCards = async () => {
+    try {
+      const response = await api.get('/cards');
+      setCards(Array.isArray(response.data) ? response.data : []);
+    } catch (err) {
+      console.error("Erro ao carregar cartões:", err);
+    }
+  };
+
+  const openCardDetails = async (card) => {
+    console.log('[TransactionsPanel][CardDetails] Abrindo:', card);
+    setDetailCard(card);
+    setDetailData(null);
+    setDetailLoading(true);
+    try {
+      if (card.type === 'credito') {
+        const [summaryRes, transactionsRes, recurrencesRes] = await Promise.allSettled([
+          api.get(`/cards/${card._id}/bill-summary`),
+          api.get('/transactions'),
+          api.get('/recurrences'),
+        ]);
+
+        console.log('[TransactionsPanel][CardDetails] bill-summary:', summaryRes);
+        console.log('[TransactionsPanel][CardDetails] transactions:', transactionsRes);
+        console.log('[TransactionsPanel][CardDetails] recurrences:', recurrencesRes);
+
+        const summaryData = summaryRes.status === 'fulfilled' ? summaryRes.value.data : null;
+        const transactionsData = transactionsRes.status === 'fulfilled' ? (transactionsRes.value.data || []) : [];
+        const recurrencesData = recurrencesRes.status === 'fulfilled' ? (recurrencesRes.value.data || []) : [];
+
+        const cardTransactions = transactionsData
+          .filter((t) => t.card?._id === card._id || t.card === card._id)
+          .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        const creditRecurrences = recurrencesData
+          .filter((r) => (r.cardId?._id || r.cardId) === card._id)
+          .map((r) => ({
+            _id: `rec-${r._id}`,
+            title: `${r.title} (${r.currentInstallment}/${r.totalInstallments}x)`,
+            date: r.createdAt || new Date().toISOString(),
+            type: 'saida',
+            amount: Number(r.amount || 0),
+            isProjected: true,
+          }));
+
+        setDetailData({
+          mode: 'credito',
+          summary: summaryData,
+          transactions: [...cardTransactions, ...creditRecurrences].sort((a, b) => new Date(b.date) - new Date(a.date)),
+        });
+      } else if (card.type === 'vale_alimentacao') {
+        const statementRes = await api.get(`/cards/${card._id}/va-statement`);
+        console.log('[TransactionsPanel][CardDetails] va-statement:', statementRes.data);
+        setDetailData({ mode: 'va', statement: statementRes.data, transactions: statementRes.data?.transactions || [] });
+      } else {
+        const transactionsRes = await api.get('/transactions');
+        console.log('[TransactionsPanel][CardDetails] transactions débito:', transactionsRes.data);
+        const cardTransactions = (transactionsRes.data || [])
+          .filter((t) => t.card?._id === card._id || t.card === card._id)
+          .sort((a, b) => new Date(b.date) - new Date(a.date));
+        setDetailData({ mode: 'debito', transactions: cardTransactions });
+      }
+    } catch (err) {
+      console.error('[TransactionsPanel][CardDetails] Erro:', {
+        message: err?.message,
+        status: err?.response?.status,
+        data: err?.response?.data,
+        url: err?.config?.url,
+        method: err?.config?.method,
+      });
+      showAlert(err?.response?.data?.message || "Erro ao carregar detalhes do cartão.", "error");
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchTransactions();
+    fetchCards();
   }, []);
 
   useEffect(() => {
@@ -161,14 +245,40 @@ const TransactionsPanel = () => {
         <h1 className="text-2xl md:text-4xl font-black text-text-primary tracking-tighter italic uppercase">
           Minhas <span className="text-brand">Transações</span>
         </h1>
-        <button 
-          onClick={() => { setTransactionToEdit(null); setIsModalOpen(true); }} 
-          className="w-full md:w-auto bg-brand text-white px-6 md:px-8 py-3.5 md:py-4 rounded-xl md:rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg flex items-center justify-center gap-3 transition-transform active:scale-95"
+        {activeTab === 'transactions' ? (
+          <button 
+            onClick={() => { setTransactionToEdit(null); setIsModalOpen(true); }} 
+            className="w-full md:w-auto bg-brand text-white px-6 md:px-8 py-3.5 md:py-4 rounded-xl md:rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg flex items-center justify-center gap-3 transition-transform active:scale-95"
+          >
+            <Plus size={18} strokeWidth={3} /> Nova Transação
+          </button>
+        ) : (
+          <button 
+            onClick={() => setIsCardModalOpen(true)} 
+            className="w-full md:w-auto bg-brand text-white px-6 md:px-8 py-3.5 md:py-4 rounded-xl md:rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg flex items-center justify-center gap-3 transition-transform active:scale-95"
+          >
+            <CreditCard size={18} strokeWidth={3} /> Gerenciar Cartões
+          </button>
+        )}
+      </div>
+
+      <div className="flex p-1.5 bg-bg-card border border-border-ui rounded-2xl mb-4 md:mb-6">
+        <button
+          onClick={() => setActiveTab('transactions')}
+          className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'transactions' ? 'bg-brand text-white' : 'text-text-secondary hover:bg-bg-main/50'}`}
         >
-          <Plus size={18} strokeWidth={3} /> Nova Transação
+          Transações
+        </button>
+        <button
+          onClick={() => setActiveTab('cards')}
+          className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'cards' ? 'bg-brand text-white' : 'text-text-secondary hover:bg-bg-main/50'}`}
+        >
+          <CreditCard size={14} /> Cartões
         </button>
       </div>
 
+      {activeTab === 'transactions' && (
+      <>
       {/* Barra de Busca e Filtros Rápidos - Compactada no mobile */}
       <div className="flex flex-col gap-3 md:gap-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
@@ -233,6 +343,7 @@ const TransactionsPanel = () => {
                 <th className="px-8 py-6 font-black text-center">Status</th>
                 <th className="px-4 py-6 font-black">Título</th>
                 <th className="px-4 py-6 font-black text-center">Categoria</th>
+                <th className="px-4 py-6 font-black text-center">Cartão</th>
                 <th className="px-4 py-6 font-black text-center">Data</th>
                 <th className="px-4 py-6 font-black text-right">Valor</th>
                 <th className="px-8 py-6 font-black text-center">Ações</th>
@@ -265,6 +376,11 @@ const TransactionsPanel = () => {
                     {t.type === 'entrada' ? '+ ' : '- '}{t.amount.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
                   </span>
                   <span className="px-1.5 py-0.5 bg-bg-main border border-border-ui/40 rounded text-[7px] font-black text-text-secondary uppercase mt-0.5">{t.category}</span>
+                  {t.card?.name && (
+                    <span className="px-1.5 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded text-[7px] font-black text-blue-500 uppercase mt-1">
+                      {t.card.name}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2">
@@ -289,6 +405,69 @@ const TransactionsPanel = () => {
           </div>
         )}
       </div>
+      </>
+      )}
+
+      {activeTab === 'cards' && (
+        <div className="bg-bg-card border border-border-ui rounded-[1.2rem] md:rounded-[2.5rem] shadow-sm p-4 md:p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+            <div className="p-4 rounded-2xl border border-border-ui/50 bg-bg-main/20">
+              <p className="text-[9px] font-black uppercase text-text-secondary">Cartões ativos</p>
+              <p className="text-2xl font-black italic text-brand mt-1">{cards.length}</p>
+            </div>
+            <div className="p-4 rounded-2xl border border-border-ui/50 bg-bg-main/20">
+              <p className="text-[9px] font-black uppercase text-text-secondary">Limite total</p>
+              <p className="text-lg font-black italic text-text-primary mt-1">
+                R$ {cards.filter(c => c.type === 'credito').reduce((acc, c) => acc + Number(c.creditLimit || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+            <div className="p-4 rounded-2xl border border-border-ui/50 bg-bg-main/20">
+              <p className="text-[9px] font-black uppercase text-text-secondary">Saldo VA total</p>
+              <p className="text-lg font-black italic text-text-primary mt-1">
+                R$ {cards.filter(c => c.type === 'vale_alimentacao').reduce((acc, c) => acc + Number(c.vaBalance || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {cards.map((card) => (
+              <div key={card._id} className="p-4 rounded-2xl border border-border-ui/40 bg-bg-main/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-black uppercase italic text-text-primary">{card.name}</p>
+                  <p className="text-[9px] font-bold text-text-secondary uppercase mt-1">
+                    {card.type === 'vale_alimentacao' ? 'vale alimentação' : card.type}
+                    {card.lastFourDigits ? ` • **** ${card.lastFourDigits}` : ''}
+                  </p>
+                </div>
+                <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-2">
+                  {card.type === 'credito' && (
+                    <p className="text-[10px] font-black text-brand text-left sm:text-right">
+                      Disp.: R$ {Number(card.availableLimit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  )}
+                  {card.type === 'vale_alimentacao' && (
+                    <p className="text-[10px] font-black text-brand text-left sm:text-right">
+                      Saldo: R$ {Number(card.vaBalance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  )}
+                  <button
+                    onClick={() => openCardDetails(card)}
+                    className="p-2 rounded-xl bg-bg-card border border-border-ui/40 text-text-secondary hover:text-brand transition-all"
+                    title="Detalhes do cartão"
+                  >
+                    <Eye size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+            {cards.length === 0 && (
+              <div className="p-8 text-center text-[10px] font-black uppercase text-text-secondary opacity-50">
+                Nenhum cartão cadastrado
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Modais */}
       <FilterSidebar isOpen={isFilterSidebarOpen} onClose={() => setIsFilterSidebarOpen(false)} categories={uniqueCategories} filters={filters} setFilters={setFilters} onApply={() => setIsFilterSidebarOpen(false)} />
@@ -296,6 +475,112 @@ const TransactionsPanel = () => {
       <ModalCategory isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} />
       <ModalRecurrence isOpen={isModalRecurrenceOpen} onClose={() => setIsModalRecurrenceOpen(false)} onAdded={fetchTransactions} />
       <ModalConfirm isOpen={isConfirmOpen} onClose={() => setIsConfirmOpen(false)} onConfirm={handleDelete} loading={deleteLoading} title="Excluir Transação" message="Deseja realmente apagar esta transação?" />
+      <ModalCard isOpen={isCardModalOpen} onClose={() => { setIsCardModalOpen(false); fetchCards(); }} />
+
+      {detailCard && (
+        <div className="fixed inset-0 z-[140] flex items-end md:items-center justify-center p-0 md:p-4">
+          <div className="absolute inset-0 bg-black/75 backdrop-blur-md" onClick={() => setDetailCard(null)} />
+          <div className="relative z-10 w-full max-w-3xl h-[90vh] md:h-auto md:max-h-[90vh] overflow-hidden bg-bg-card border border-border-ui rounded-t-[2rem] md:rounded-[2rem] shadow-2xl flex flex-col">
+            <div className="p-5 md:p-6 border-b border-border-ui/40 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-black uppercase italic text-text-primary">{detailCard.name}</h3>
+                <p className="text-[10px] font-black uppercase tracking-widest text-text-secondary mt-1">
+                  {detailCard.type === 'credito' ? 'Detalhes de fatura' : detailCard.type === 'vale_alimentacao' ? 'Extrato VA' : 'Compras no débito'}
+                </p>
+              </div>
+              <button onClick={() => setDetailCard(null)} className="p-2 rounded-xl hover:bg-bg-main transition-all">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-4 md:p-6 overflow-y-auto custom-scrollbar space-y-4">
+              {detailLoading && (
+                <div className="h-24 flex items-center justify-center">
+                  <Loader2 size={20} className="animate-spin text-brand" />
+                </div>
+              )}
+
+              {!detailLoading && detailData?.mode === 'credito' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="p-4 rounded-2xl border border-border-ui/40 bg-bg-main/20">
+                    <p className="text-[9px] uppercase font-black text-text-secondary">Vira em</p>
+                    <p className="text-sm font-black italic text-brand mt-1">
+                      {detailData.summary?.card?.closingDay ? `Todo dia ${detailData.summary.card.closingDay}` : '--'}
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-2xl border border-border-ui/40 bg-bg-main/20">
+                    <p className="text-[9px] uppercase font-black text-text-secondary">Fatura atual</p>
+                    <p className="text-sm font-black italic text-red-500 mt-1">
+                      R$ {Number(detailData.summary?.currentBill?.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-2xl border border-border-ui/40 bg-bg-main/20">
+                    <p className="text-[9px] uppercase font-black text-text-secondary">Limite disponível</p>
+                    <p className="text-sm font-black italic text-green-500 mt-1">
+                      R$ {Number(detailData.summary?.card?.availableLimit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {!detailLoading && detailData?.mode === 'va' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="p-4 rounded-2xl border border-border-ui/40 bg-bg-main/20">
+                    <p className="text-[9px] uppercase font-black text-text-secondary">Saldo VA</p>
+                    <p className="text-sm font-black italic text-brand mt-1">
+                      R$ {Number(detailData.statement?.card?.vaBalance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-2xl border border-border-ui/40 bg-bg-main/20">
+                    <p className="text-[9px] uppercase font-black text-text-secondary">Recarga</p>
+                    <p className="text-sm font-black italic text-green-500 mt-1">
+                      R$ {Number(detailData.statement?.card?.vaRechargeAmount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-2xl border border-border-ui/40 bg-bg-main/20">
+                    <p className="text-[9px] uppercase font-black text-text-secondary">Vira em</p>
+                    <p className="text-sm font-black italic text-text-primary mt-1">
+                      Todo dia {detailData.statement?.card?.vaRechargeDay || '--'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {!detailLoading && (
+                <div className="rounded-2xl border border-border-ui/40 overflow-hidden">
+                  <div className="px-4 py-3 bg-bg-main/30 border-b border-border-ui/40 flex items-center gap-2">
+                    <Wallet size={14} className="text-brand" />
+                    <p className="text-[10px] font-black uppercase tracking-widest text-text-secondary">Compras recentes</p>
+                  </div>
+                  <div className="max-h-[360px] overflow-y-auto custom-scrollbar divide-y divide-border-ui/20">
+                    {(detailData?.transactions || []).slice(0, 30).map((t) => (
+                      <div key={t._id} className="px-4 py-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-[10px] font-black uppercase text-text-primary">{t.title}</p>
+                          <p className="text-[9px] font-bold text-text-secondary mt-1 flex items-center gap-1">
+                            <CalendarClock size={12} />
+                            {new Date(t.date).toLocaleDateString('pt-BR')}
+                          </p>
+                        </div>
+                        <p className={`text-[10px] font-black italic ${t.type === 'entrada' ? 'text-green-500' : 'text-red-500'}`}>
+                          {t.type === 'entrada' ? '+ ' : '- '}
+                          {Number(t.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          {t.isProjected ? ' (prevista)' : ''}
+                        </p>
+                      </div>
+                    ))}
+                    {(detailData?.transactions || []).length === 0 && (
+                      <div className="px-4 py-6 text-center text-[10px] font-black uppercase text-text-secondary opacity-60">
+                        Sem compras para este cartão
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -330,6 +615,13 @@ const TransactionRow = ({ t, onEdit, onDelete }) => {
       </td>
       <td className="px-4 py-6 text-center">
         <span className="px-4 py-1.5 bg-bg-main border border-border-ui/50 rounded-lg text-[9px] font-black text-text-secondary uppercase tracking-widest">{t.category}</span>
+      </td>
+      <td className="px-4 py-6 text-center">
+        {t.card ? (
+          <span className="px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-lg text-[9px] font-black text-blue-500 uppercase tracking-widest">
+            {t.card?.name || 'Cartão'}
+          </span>
+        ) : null}
       </td>
       <td className="px-4 py-6 text-center text-text-secondary font-bold text-xs">
         {new Date(t.date).toLocaleDateString('pt-br', { timeZone: 'UTC' })}

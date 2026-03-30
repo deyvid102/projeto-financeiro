@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Tag, Loader2, Wallet, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { X, FileText, Tag, Loader2, ArrowUpCircle, ArrowDownCircle, CreditCard, Hash } from 'lucide-react';
 import api from '@/services/api';
 import SelectStyle from '../SelectStyle'; 
 import { useAlert } from '../../context/AlertContext'; 
@@ -7,12 +7,13 @@ import { useAlert } from '../../context/AlertContext';
 const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToEdit, presetData }) => {
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]); 
+  const [cards, setCards] = useState([]);
   const { showAlert } = useAlert();
 
   const getTodayString = () => new Date().toISOString().split('T')[0];
 
   const initialState = {
-    title: '', amount: '', type: 'saida', category: 'outros', date: getTodayString(), goal: null 
+    title: '', amount: '', type: 'saida', category: 'outros', date: getTodayString(), goal: null, cardId: '', installments: 1
   };
 
   const [formData, setFormData] = useState(initialState);
@@ -23,6 +24,15 @@ const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToE
   };
 
   const isExpense = formData.type === 'saida';
+  const selectedCard = cards.find((card) => card._id === formData.cardId) || null;
+  const isCreditCardFlow = selectedCard?.type === 'credito' && !transactionToEdit;
+  const installmentCount = Math.min(12, Math.max(1, Number(formData.installments || 1)));
+  const totalAmount = Number(formData.amount || 0);
+  const installmentAmount = isCreditCardFlow && installmentCount > 0
+    ? Number((totalAmount / installmentCount).toFixed(2))
+    : totalAmount;
+  const creditAvailable = selectedCard?.availableLimit ?? Math.max(0, Number(selectedCard?.creditLimit || 0) - Number(selectedCard?.usedLimit || 0));
+  const isVaCardFlow = selectedCard?.type === 'vale_alimentacao' && !transactionToEdit;
   const themeColor = isExpense ? 'red-600' : 'green-600';
   const themeBorder = isExpense ? 'focus:border-red-600' : 'focus:border-green-600';
   const themeText = isExpense ? 'text-red-600' : 'text-green-600';
@@ -30,23 +40,24 @@ const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToE
   const themeShadow = isExpense ? 'shadow-red-600/20' : 'shadow-green-600/20';
 
   useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchData = async () => {
       try {
-        const response = await api.get('/categories');
-        const formatted = response.data.map(cat => ({ label: cat.name, value: cat.name, _id: cat._id }));
+        const [catResponse, cardResponse] = await Promise.all([api.get('/categories'), api.get('/cards')]);
+        const formatted = catResponse.data.map(cat => ({ label: cat.name, value: cat.name, _id: cat._id }));
         if (presetData && !formatted.find(c => c.value === 'caixinha')) {
           formatted.push({ label: 'Caixinha', value: 'caixinha' });
         }
         setCategories(formatted);
+        setCards(Array.isArray(cardResponse.data) ? cardResponse.data : []);
       } catch (err) { console.error(err); }
     };
-    if (isOpen) fetchCategories();
+    if (isOpen) fetchData();
   }, [isOpen, presetData]);
 
   useEffect(() => {
     if (isOpen) {
       if (transactionToEdit) {
-        setFormData({ ...transactionToEdit, date: transactionToEdit.date?.split('T')[0] || getTodayString() });
+        setFormData({ ...transactionToEdit, cardId: transactionToEdit.card?._id || '', installments: 1, date: transactionToEdit.date?.split('T')[0] || getTodayString() });
       } else if (presetData) {
         const goalId = presetData._id || (typeof presetData.goal === 'string' ? presetData.goal : presetData.goal?._id);
         setFormData({
@@ -54,7 +65,9 @@ const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToE
           title: presetData.title || '',
           type: presetData.type || 'saida',
           category: 'caixinha',
-          goal: goalId
+          goal: goalId,
+          cardId: '',
+          installments: 1,
         });
       } else {
         setFormData(initialState);
@@ -62,25 +75,79 @@ const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToE
     }
   }, [isOpen, transactionToEdit, presetData]);
 
+  useEffect(() => {
+    if (transactionToEdit) return;
+    if (!selectedCard) return;
+
+    if (selectedCard.type === 'credito') {
+      setFormData((prev) => ({ ...prev, type: 'saida' }));
+    }
+
+    if (selectedCard.type === 'vale_alimentacao') {
+      setFormData((prev) => ({ ...prev, type: 'saida', category: 'vale_alimentacao' }));
+    }
+  }, [selectedCard, transactionToEdit]);
+
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
-    const finalAmount = Number(formData.amount);
+    const finalAmount = totalAmount;
     if (presetData && formData.type === 'entrada' && finalAmount > getAvailableBalance()) {
         return showAlert(`Saldo insuficiente: R$ ${getAvailableBalance().toLocaleString('pt-BR')}`, "error");
     }
     if (finalAmount <= 0) return showAlert("Insira um valor válido", "error");
+    if (!transactionToEdit && isCreditCardFlow && (installmentCount < 1 || installmentCount > 12)) {
+      return showAlert("Parcelamento inválido. Escolha entre 1x e 12x.", "error");
+    }
+    if (!transactionToEdit && isCreditCardFlow && finalAmount > Number(creditAvailable || 0)) {
+      return showAlert(`Limite insuficiente. Disponível: R$ ${Number(creditAvailable || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, "error");
+    }
 
     setLoading(true);
     try {
-      const payload = { ...formData, amount: finalAmount, isPaid: true };
       if (transactionToEdit) {
+        const payload = {
+          title: formData.title,
+          amount: finalAmount,
+          type: formData.type,
+          category: formData.category,
+          date: formData.date,
+          goal: formData.goal || null,
+          cardId: formData.cardId || null,
+          isPaid: true,
+        };
         await api.put(`/transactions/${transactionToEdit._id}`, payload);
+      } else if (isCreditCardFlow) {
+        const recurrencePayload = {
+          title: formData.title,
+          amount: installmentAmount,
+          type: 'saida',
+          category: formData.category,
+          cardId: selectedCard._id,
+          isInstallment: true,
+          totalInstallments: installmentCount,
+          frequency: 'monthly',
+          dayOfMonth: [new Date().getDate()],
+          dayOfWeek: [],
+          monthOfYear: [],
+          isActive: true,
+        };
+        await api.post('/recurrences', recurrencePayload);
       } else {
+        const payload = {
+          title: formData.title,
+          amount: finalAmount,
+          type: formData.type,
+          category: formData.category,
+          date: formData.date,
+          goal: formData.goal || null,
+          cardId: formData.cardId || null,
+          isPaid: true,
+        };
         await api.post('/transactions', payload);
       }
       onTransactionAdded(); 
       onClose();
-      showAlert("Operação realizada!", "success");
+      showAlert(isCreditCardFlow ? "Compra no crédito parcelada com sucesso!" : "Operação realizada!", "success");
     } catch (err) {
       showAlert(err.response?.data?.message || "Erro ao salvar", "error");
     } finally { setLoading(false); }
@@ -93,10 +160,10 @@ const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToE
       <div className="absolute inset-0" onClick={onClose} />
       
       <div className="relative w-full max-w-md animate-in zoom-in-95 duration-200">
-        <div className="bg-bg-card rounded-[2.5rem] shadow-2xl border border-border-ui relative">
+        <div className="bg-bg-card rounded-[2rem] shadow-2xl border border-border-ui relative max-h-[88vh] overflow-y-auto custom-scrollbar">
           
-          <div className="flex justify-between items-center p-6 border-b border-border-ui/50 bg-bg-main/20 rounded-t-[2.5rem]">
-            <h2 className="text-xl font-black text-text-primary italic uppercase tracking-tighter">
+          <div className="flex justify-between items-center p-4 border-b border-border-ui/50 bg-bg-main/20 rounded-t-[2rem]">
+            <h2 className="text-lg font-black text-text-primary italic uppercase tracking-tighter">
               {presetData ? (isExpense ? 'Depositar' : 'Resgatar') : 'Lançamento'} <span className={themeText}>MAX</span>
             </h2>
             <button onClick={onClose} className="p-2 hover:bg-red-500/10 hover:text-red-500 rounded-xl transition-all cursor-pointer">
@@ -104,34 +171,80 @@ const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToE
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          <form onSubmit={handleSubmit} className="p-4 space-y-4">
             
             {!presetData && (
-              <div className="flex p-1.5 bg-bg-main rounded-2xl border border-border-ui gap-1.5">
+              <div className="flex p-1 bg-bg-main rounded-xl border border-border-ui gap-1">
                 <button
                   type="button"
                   onClick={() => setFormData({...formData, type: 'entrada'})}
-                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all cursor-pointer ${
+                  disabled={isCreditCardFlow || isVaCardFlow}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg font-black uppercase text-[8px] tracking-widest transition-all cursor-pointer ${
                     formData.type === 'entrada' ? 'bg-green-600 text-white shadow-lg' : 'text-text-secondary hover:bg-border-ui/50'
-                  }`}
+                  } ${(isCreditCardFlow || isVaCardFlow) ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  <ArrowUpCircle size={14} /> Entrada
+                  <ArrowUpCircle size={13} /> Entrada
                 </button>
                 <button
                   type="button"
                   onClick={() => setFormData({...formData, type: 'saida'})}
-                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all cursor-pointer ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg font-black uppercase text-[8px] tracking-widest transition-all cursor-pointer ${
                     formData.type === 'saida' ? 'bg-red-600 text-white shadow-lg' : 'text-text-secondary hover:bg-border-ui/50'
                   }`}
                 >
-                  <ArrowDownCircle size={14} /> Saída
+                  <ArrowDownCircle size={13} /> Saída
                 </button>
+              </div>
+            )}
+
+            {!presetData && !transactionToEdit && (
+              <div className="relative z-[120]">
+                <SelectStyle
+                  label="Cartão (opcional)"
+                  icon={CreditCard}
+                  value={formData.cardId || 'no_card'}
+                  onChange={(e) => setFormData({ ...formData, cardId: e.target.value === 'no_card' ? '' : e.target.value, installments: 1 })}
+                  options={[
+                    { label: 'Sem cartão (conta corrente)', value: 'no_card' },
+                    ...cards.map((card) => ({
+                      label: `${card.name} • ${card.type === 'vale_alimentacao' ? 'vale alimentação' : card.type}`,
+                      value: card._id,
+                    })),
+                  ]}
+                />
+              </div>
+            )}
+
+            {isCreditCardFlow && (
+              <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/20 space-y-2.5 text-left">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40 text-blue-500" size={14} />
+                    <input
+                      type="number"
+                      min="1"
+                      max="12"
+                      value={formData.installments}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, installments: Math.min(12, Math.max(1, Number(e.target.value) || 1)) }))}
+                      className="w-full pl-10 pr-4 py-2.5 bg-bg-main border border-blue-500/20 rounded-lg text-sm font-black outline-none"
+                    />
+                  </div>
+                  <div className="px-3 py-2.5 rounded-lg bg-bg-main border border-border-ui text-[9px] font-black text-text-secondary uppercase tracking-wide break-words">
+                    Limite: R$ {Number(creditAvailable || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <p className="text-[9px] font-bold text-text-secondary">
+                  Parcela estimada: <span className="text-blue-500">R$ {Number(installmentAmount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span> ({installmentCount}x)
+                </p>
+                <p className={`text-[9px] font-black ${totalAmount > Number(creditAvailable || 0) ? 'text-red-500' : 'text-green-500'}`}>
+                  Total da compra: R$ {Number(totalAmount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
               </div>
             )}
 
             <div className="space-y-3 text-left">
               <div className="flex justify-between items-center px-1">
-                <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest">Valor</label>
+                <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest">{isCreditCardFlow ? 'Valor total da compra' : 'Valor'}</label>
                 {presetData && formData.type === 'entrada' && (
                   <button 
                     type="button" 
@@ -144,10 +257,10 @@ const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToE
               </div>
               
               <div className="relative">
-                <span className={`absolute left-5 top-1/2 -translate-y-1/2 font-black text-2xl italic ${themeText}`}>R$</span>
+                <span className={`absolute left-4 top-1/2 -translate-y-1/2 font-black text-xl italic ${themeText}`}>R$</span>
                 <input
                   type="number" step="0.01" placeholder="0,00"
-                  className={`w-full pl-16 pr-5 py-5 bg-bg-main border border-border-ui rounded-2xl text-text-primary font-black text-3xl outline-none transition-all shadow-inner ${themeBorder}`}
+                  className={`w-full pl-12 pr-4 py-3.5 bg-bg-main border border-border-ui rounded-xl text-text-primary font-black text-2xl outline-none transition-all shadow-inner ${themeBorder}`}
                   value={formData.amount} 
                   onChange={(e) => setFormData({...formData, amount: e.target.value})} 
                   required autoFocus
@@ -156,7 +269,7 @@ const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToE
             </div>
 
             {/* CATEGORIA MOVIDA PARA CIMA */}
-            <div className={`relative z-[100] ${presetData ? 'opacity-50 pointer-events-none' : ''}`}> 
+            <div className={`relative z-[100] ${presetData ? 'opacity-50 pointer-events-none' : ''} ${isVaCardFlow ? 'opacity-60 pointer-events-none' : ''}`}> 
               <SelectStyle
                 label="Categoria" 
                 icon={Tag} 
@@ -174,7 +287,7 @@ const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToE
                 <input
                   type="text"
                   placeholder="Ex: Pagamento"
-                  className={`w-full pl-12 pr-5 py-4 bg-bg-main border border-border-ui rounded-2xl text-text-primary font-bold italic outline-none text-sm transition-all ${presetData ? 'opacity-60 cursor-not-allowed' : themeBorder}`}
+                  className={`w-full pl-11 pr-4 py-3 bg-bg-main border border-border-ui rounded-xl text-text-primary font-bold italic outline-none text-sm transition-all ${presetData ? 'opacity-60 cursor-not-allowed' : themeBorder}`}
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   required readOnly={!!presetData}
@@ -186,7 +299,7 @@ const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToE
               <label className="text-[9px] font-black text-text-secondary uppercase tracking-widest ml-1">Data</label>
               <input
                 type="date"
-                className={`w-full px-4 py-4 bg-bg-main border border-border-ui rounded-2xl text-text-primary text-xs font-black outline-none transition-all ${themeBorder}`}
+                className={`w-full px-4 py-3 bg-bg-main border border-border-ui rounded-xl text-text-primary text-xs font-black outline-none transition-all ${themeBorder}`}
                 value={formData.date}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                 required
@@ -196,7 +309,7 @@ const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToE
             <button
               type="submit" 
               disabled={loading}
-              className={`w-full text-white py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-lg transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer ${themeBg} ${themeShadow} hover:scale-[1.01] active:scale-95`}
+              className={`w-full text-white py-3.5 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg transition-all flex items-center justify-center gap-2 mt-1 cursor-pointer ${themeBg} ${themeShadow} hover:scale-[1.01] active:scale-95`}
             >
               {loading ? <Loader2 className="animate-spin" size={18} /> : "Confirmar Lançamento"}
             </button>

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Sun, Moon, LogOut, ChevronDown, Settings } from 'lucide-react';
+import { Sun, Moon, LogOut, ChevronDown, Settings, CreditCard } from 'lucide-react';
 import { useTheme } from '@/components/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import NotificationCenter from '@/components/NotificationCenter';
 import ModalSettings from '@/components/modals/ModalSettings'; 
+import ModalCard from '@/components/modals/ModalCard';
 
 const Topbar = () => {
   const { isDarkMode, toggleTheme } = useTheme();
@@ -11,6 +12,7 @@ const Topbar = () => {
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false); 
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
 
   const [userData] = useState(() => {
     const rawName = localStorage.getItem('user_name');
@@ -68,6 +70,14 @@ const Topbar = () => {
                   <p className="text-xs font-bold text-text-primary truncate">{userData.name}</p>
                 </div>
                 <div className="p-2 space-y-1">
+                  <button
+                    onClick={() => { setIsCardModalOpen(true); setIsMenuOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:bg-bg-main/60 hover:text-brand transition-all group"
+                  >
+                    <CreditCard size={16} className="group-hover:scale-110 transition-transform duration-300" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Cartões</span>
+                  </button>
+
                   <button 
                     onClick={() => { setIsSettingsOpen(true); setIsMenuOpen(false); }}
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:bg-bg-main/60 hover:text-brand transition-all group"
@@ -88,6 +98,7 @@ const Topbar = () => {
       </div>
 
       <ModalSettings isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <ModalCard isOpen={isCardModalOpen} onClose={() => setIsCardModalOpen(false)} />
     </header>
   );
 };

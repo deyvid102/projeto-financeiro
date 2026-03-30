@@ -15,6 +15,7 @@ import routeInvestment from "./routes/RouteInvestment.js";
 import routeCategory from "./routes/RouteCategory.js"; 
 import routeGoal from "./routes/RouteGoal.js";
 import routeRecurrence from "./routes/RouteRecurrence.js";
+import routeCard from "./routes/RouteCard.js";
 
 dotenv.config();
 
@@ -36,6 +37,7 @@ app.use('/api/investments', routeInvestment);
 app.use('/api/categories', routeCategory);
 app.use('/api/goals', routeGoal);
 app.use('/api/recurrences', routeRecurrence);
+app.use('/api/cards', routeCard);
 
 app.get("/", (req, res) => {
   res.send("Servidor do financeMAX rodando corretamente no Render!");

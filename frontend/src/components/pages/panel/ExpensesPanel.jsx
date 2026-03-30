@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   DollarSign, PieChart as PieIcon, ChevronRight, Search, 
   X, ArrowUpCircle, ArrowDownCircle, Target, Calendar, TrendingUp, 
-  TrendingDown, ChevronLeft, Filter, Check, Wallet
+  TrendingDown, ChevronLeft, Filter, Check, Wallet, CreditCard
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -158,6 +158,7 @@ const ExpensesPanel = () => {
   const [loading, setLoading] = useState(true);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [cards, setCards] = useState([]);
   
   const [filters, setFilters] = useState({
     viewType: 'todos',
@@ -169,8 +170,12 @@ const ExpensesPanel = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await api.get('/transactions');
-        setAllTransactions(response.data);
+        const [transactionRes, cardRes] = await Promise.all([
+          api.get('/transactions'),
+          api.get('/cards'),
+        ]);
+        setAllTransactions(transactionRes.data || []);
+        setCards(cardRes.data || []);
       } catch (err) { console.error(err); } finally { setLoading(false); }
     };
     fetchData();
@@ -235,6 +240,19 @@ const ExpensesPanel = () => {
     filteredData.forEach(t => { cats[t.category] = (cats[t.category] || 0) + t.amount; });
     return Object.entries(cats).map(([name, value]) => ({ name, value, percent: stats.totalVolume > 0 ? (value / stats.totalVolume) * 100 : 0 })).sort((a, b) => b.value - a.value);
   }, [filteredData, stats.totalVolume]);
+
+  const cardsOverview = useMemo(() => {
+    const creditCards = cards.filter((c) => c.type === 'credito');
+    const used = creditCards.reduce((acc, c) => acc + Number(c.usedLimit || 0), 0);
+    const limit = creditCards.reduce((acc, c) => acc + Number(c.creditLimit || 0), 0);
+    const va = cards.filter((c) => c.type === 'vale_alimentacao').reduce((acc, c) => acc + Number(c.vaBalance || 0), 0);
+    return {
+      total: cards.length,
+      used,
+      available: limit - used,
+      va,
+    };
+  }, [cards]);
 
   // Utilizando o componente padrão para consistência visual
   if (loading) return <LoadingState message="PROCESSANDO FLUXO ESTRATÉGICO..." />;
@@ -330,6 +348,36 @@ const ExpensesPanel = () => {
 
       {/* BOTTOM GRIDS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8">
+        <div className="bg-bg-card border border-border-ui rounded-[2rem] p-6 md:p-8 lg:col-span-2">
+          <h3 className="text-[10px] md:text-xs font-black text-text-primary uppercase mb-6 italic flex items-center gap-2">
+            <CreditCard size={12} className="text-brand"/> Cartões no Fluxo
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="p-4 rounded-2xl bg-bg-main/20 border border-border-ui/30">
+              <p className="text-[8px] uppercase font-black text-text-secondary">Ativos</p>
+              <p className="text-2xl font-black italic text-brand mt-1">{cardsOverview.total}</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-bg-main/20 border border-border-ui/30">
+              <p className="text-[8px] uppercase font-black text-text-secondary">Crédito usado</p>
+              <p className="text-sm font-black italic text-red-500 mt-2">
+                {cardsOverview.used.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </p>
+            </div>
+            <div className="p-4 rounded-2xl bg-bg-main/20 border border-border-ui/30">
+              <p className="text-[8px] uppercase font-black text-text-secondary">Crédito livre</p>
+              <p className="text-sm font-black italic text-green-500 mt-2">
+                {cardsOverview.available.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </p>
+            </div>
+            <div className="p-4 rounded-2xl bg-bg-main/20 border border-border-ui/30">
+              <p className="text-[8px] uppercase font-black text-text-secondary">Saldo VA</p>
+              <p className="text-sm font-black italic text-brand mt-2">
+                {cardsOverview.va.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-bg-card border border-border-ui rounded-[2rem] p-6 md:p-8">
           <h3 className="text-[10px] md:text-xs font-black text-text-primary uppercase mb-6 italic flex items-center gap-2">
             <ChevronRight size={12} className="text-brand"/> Categorias

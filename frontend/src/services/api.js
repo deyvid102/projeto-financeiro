@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Defina a URL BASE sem o /api no final se a sua variável de ambiente já o tiver, 
 // ou padronize para evitar confusão.
-const RENDER_URL = 'https://projeto-financeiro-a705.onrender.com/api';
+const RENDER_URL = 'http://localhost:5000/api';
 
 const API_URL = import.meta.env.VITE_API_URL || RENDER_URL;
 
@@ -32,6 +32,12 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    console.error('[API ERROR]', {
+      status: error?.response?.status,
+      url: error?.config?.url,
+      method: error?.config?.method,
+      response: error?.response?.data,
+    });
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('token');
       // Opcional: window.location.href = '/login';

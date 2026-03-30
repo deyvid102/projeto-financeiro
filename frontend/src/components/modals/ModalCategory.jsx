@@ -94,7 +94,7 @@ const ModalCategory = ({ isOpen, onClose }) => {
                   id="category-input"
                   type="text" 
                   placeholder="Nome da categoria..."
-                  className={`w-full px-5 py-3.5 bg-bg-main border ${editingId ? 'border-brand shadow-[0_0_15px_rgba(var(--brand-rgb),0.2)]' : 'border-border-ui'} rounded-xl outline-none text-sm font-bold italic text-text-primary transition-all`}
+                  className={`w-full px-5 py-3.5 bg-bg-main border ${editingId ? 'border-brand shadow-[0_0_15px_rgba(var(--brand-rgb),0.2)]' : 'border-border-ui'} rounded-xl outline-none text-sm font-bold italic text-text-primary`}
                   value={categoryName}
                   onChange={(e) => setCategoryName(e.target.value)}
                 />
@@ -108,7 +108,7 @@ const ModalCategory = ({ isOpen, onClose }) => {
                   </button>
                 )}
               </div>
-              <button type="submit" className={`px-5 py-3.5 rounded-xl text-white transition-all ${editingId ? 'bg-emerald-500' : 'bg-brand'}`}>
+              <button type="submit" className={`px-5 py-3.5 rounded-xl text-white ${editingId ? 'bg-emerald-500' : 'bg-brand'}`}>
                 {editingId ? <Check size={22} /> : <Plus size={22} />}
               </button>
             </form>
@@ -118,7 +118,7 @@ const ModalCategory = ({ isOpen, onClose }) => {
                 <div className="py-10 flex justify-center"><Loader2 className="animate-spin text-brand" /></div>
               ) : (
                 categories.map(cat => (
-                  <div key={cat._id} className={`flex justify-between items-center p-4 rounded-2xl border transition-all ${editingId === cat._id ? 'bg-brand/10 border-brand/50 scale-[0.98]' : 'bg-bg-main/40 border-border-ui/40'}`}>
+                  <div key={cat._id} className={`flex justify-between items-center p-4 rounded-2xl border ${editingId === cat._id ? 'bg-brand/10 border-brand/50' : 'bg-bg-main/40 border-border-ui/40'}`}>
                     <span className="text-xs font-black text-text-primary uppercase italic">{cat.name}</span>
                     <div className="flex gap-1 shrink-0">
                       <button onClick={() => startEdit(cat)} className="p-2 text-text-secondary hover:text-brand"><Edit2 size={16} /></button>

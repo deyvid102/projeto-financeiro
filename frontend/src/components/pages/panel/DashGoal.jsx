@@ -83,34 +83,34 @@ const DashGoal = () => {
   if (loading) return <LoadingState message="ACESSANDO COFRES MAX..." />;
 
   return (
-    <div className="w-full pb-10 px-1 overflow-hidden space-y-6 md:space-y-10">
+    <div className="w-full pb-8 px-1 overflow-hidden space-y-5 md:space-y-8">
       
       {/* HEADER & TOPBAR */}
-      <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-top-6 duration-700">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="text-left">
-            <h1 className="text-3xl md:text-4xl font-black text-text-primary italic uppercase tracking-tighter">
+            <h1 className="text-2xl md:text-3xl font-black text-text-primary italic uppercase tracking-tighter">
               suas <span className="text-brand">caixinhas</span>
             </h1>
           </div>
           <button 
             onClick={() => setIsModalGoalOpen(true)}
-            className="bg-brand text-white px-8 py-4 rounded-2xl font-black uppercase text-[11px] tracking-widest hover:shadow-2xl transition-all flex items-center justify-center gap-3 active:scale-95 w-full md:w-auto"
+            className="bg-brand text-white px-6 py-3 rounded-xl md:rounded-2xl font-black uppercase text-[10px] tracking-widest hover:shadow-2xl transition-all flex items-center justify-center gap-2 active:scale-95 w-full md:w-auto"
           >
-            <Plus size={18} strokeWidth={3} /> 
+            <Plus size={16} strokeWidth={3} /> 
             <span>Criar Caixinha</span>
           </button>
         </div>
 
         {/* RESUMO TOTAL - Estilo Topbar Compacta */}
-        <div className="bg-bg-card border border-border-ui p-4 md:p-8 rounded-2xl md:rounded-[3rem] shadow-sm flex items-center justify-between">
+        <div className="bg-bg-card border border-border-ui p-3.5 md:p-6 rounded-2xl md:rounded-[2.5rem] shadow-sm flex items-center justify-between">
            <div className="flex items-center gap-3 md:gap-4">
-              <div className="p-2 md:p-4 bg-brand/10 rounded-xl text-brand">
-                <PiggyBank size={20} md:size={24} strokeWidth={2.5} />
+              <div className="p-2 md:p-3 bg-brand/10 rounded-xl text-brand">
+                <PiggyBank size={18} strokeWidth={2.5} />
               </div>
               <div>
                 <p className="text-[8px] md:text-[10px] text-text-secondary font-black uppercase tracking-widest opacity-60">Total Acumulado</p>
-                <h2 className="text-xl md:text-3xl font-black text-text-primary italic tracking-tighter">
+                <h2 className="text-lg md:text-2xl font-black text-text-primary italic tracking-tighter">
                   {totalCaixinhas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </h2>
               </div>
@@ -123,21 +123,21 @@ const DashGoal = () => {
       </div>
 
       {/* GRID DE CAIXINHAS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-5">
         {goals.map((goal, index) => (
           <div 
             key={goal._id} 
-            className="animate-in fade-in slide-in-from-bottom-8 duration-700 fill-mode-both"
+            className="fill-mode-both"
             style={{ animationDelay: `${(index + 1) * 100}ms` }}
           >
-            <div className="bg-bg-card border border-border-ui rounded-[1.8rem] md:rounded-[3rem] p-5 md:p-8 shadow-sm hover:border-brand transition-all group flex flex-col justify-between h-full">
+            <div className="bg-bg-card border border-border-ui rounded-[1.4rem] md:rounded-[2.2rem] p-4 md:p-5 shadow-sm hover:border-brand transition-all group flex flex-col justify-between h-full">
               
-              <div className="flex justify-between items-center mb-5 md:mb-8">
+              <div className="flex justify-between items-center mb-4 md:mb-5">
                 <div 
-                  className="p-2.5 md:p-4 rounded-xl md:rounded-[1.5rem] text-white shadow-lg" 
+                  className="p-2.5 md:p-3 rounded-xl md:rounded-[1.2rem] text-white shadow-lg" 
                   style={{ backgroundColor: goal.color || '#3b82f6' }}
                 >
-                  <PiggyBank size={18} md:size={24} strokeWidth={2.5} />
+                  <PiggyBank size={16} strokeWidth={2.5} />
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-[8px] md:text-[9px] font-black text-text-secondary uppercase tracking-widest bg-bg-main px-2 py-1 rounded border border-border-ui">{goal.categoryGoal}</span>
@@ -150,34 +150,34 @@ const DashGoal = () => {
                     })}
                     className="p-2 text-text-secondary hover:text-red-500 rounded-lg transition-all"
                   >
-                    <Trash2 size={16} md:size={20} />
+                    <Trash2 size={15} />
                   </button>
                 </div>
               </div>
 
-              <div className="text-left mb-4 md:mb-8">
-                <h3 className="text-lg md:text-2xl font-black text-text-primary italic uppercase tracking-tighter group-hover:text-brand transition-colors truncate">
+              <div className="text-left mb-3 md:mb-5">
+                <h3 className="text-base md:text-xl font-black text-text-primary italic uppercase tracking-tighter group-hover:text-brand transition-colors truncate">
                   {goal.name}
                 </h3>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 md:gap-4 mb-5 md:mb-8">
+              <div className="grid grid-cols-2 gap-2 md:gap-3 mb-4 md:mb-5">
                 <div className="text-left">
                   <p className="text-[7px] md:text-[9px] font-black text-text-secondary uppercase tracking-widest mb-0.5 opacity-50">Acumulado</p>
-                  <p className="text-sm md:text-xl font-black text-brand italic tracking-tight truncate">R$ {goal.currentAmount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-sm md:text-lg font-black text-brand italic tracking-tight truncate">R$ {goal.currentAmount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-[7px] md:text-[9px] font-black text-text-secondary uppercase tracking-widest mb-0.5 opacity-50">Meta</p>
-                  <p className="text-sm md:text-xl font-black text-text-primary italic tracking-tight opacity-40 truncate">R$ {goal.targetAmount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-sm md:text-lg font-black text-text-primary italic tracking-tight opacity-40 truncate">R$ {goal.targetAmount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                 </div>
               </div>
 
-              <div className="space-y-2 md:space-y-3 mb-6 md:mb-10">
+              <div className="space-y-2 md:space-y-2.5 mb-5 md:mb-6">
                 <div className="flex justify-between items-center px-1">
                   <span className="text-[7px] md:text-[10px] font-black text-text-secondary uppercase tracking-widest">Progresso</span>
                   <span className="text-[9px] md:text-[11px] font-black text-brand italic bg-brand/10 px-1.5 py-0.5 rounded-md">{goal.progress}%</span>
                 </div>
-                <div className="h-2 md:h-4 w-full bg-bg-main rounded-full overflow-hidden border border-border-ui/50 p-0.5 md:p-1 shadow-inner">
+                <div className="h-2.5 md:h-3 w-full bg-bg-main rounded-full overflow-hidden border border-border-ui/50 p-0.5 shadow-inner">
                   <div 
                     className="h-full rounded-full transition-all duration-1000 ease-out"
                     style={{ 
@@ -188,18 +188,18 @@ const DashGoal = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 md:gap-4">
+              <div className="grid grid-cols-2 gap-2.5 md:gap-3">
                 <button 
                   onClick={() => handleDepositClick(goal)}
-                  className="flex items-center justify-center gap-2 py-3 md:py-4 bg-bg-main border border-border-ui rounded-xl md:rounded-2xl text-[8px] md:text-[10px] font-black uppercase hover:bg-green-500 hover:text-white transition-all active:scale-95"
+                  className="flex items-center justify-center gap-1.5 py-2.5 md:py-3 bg-bg-main border border-border-ui rounded-xl md:rounded-2xl text-[8px] md:text-[9px] font-black uppercase hover:bg-green-500 hover:text-white transition-all active:scale-95"
                 >
-                  <ArrowUpRight size={14} md:size={16} strokeWidth={3} /> Guardar
+                  <ArrowUpRight size={13} strokeWidth={3} /> Guardar
                 </button>
                 <button 
                   onClick={() => handleWithdrawClick(goal)}
-                  className="flex items-center justify-center gap-2 py-3 md:py-4 bg-bg-main border border-border-ui rounded-xl md:rounded-2xl text-[8px] md:text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition-all active:scale-95"
+                  className="flex items-center justify-center gap-1.5 py-2.5 md:py-3 bg-bg-main border border-border-ui rounded-xl md:rounded-2xl text-[8px] md:text-[9px] font-black uppercase hover:bg-red-500 hover:text-white transition-all active:scale-95"
                 >
-                  <ArrowDownLeft size={14} md:size={16} strokeWidth={3} /> Resgatar
+                  <ArrowDownLeft size={13} strokeWidth={3} /> Resgatar
                 </button>
               </div>
             </div>

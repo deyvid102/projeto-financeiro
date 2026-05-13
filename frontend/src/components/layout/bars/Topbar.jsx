@@ -1,33 +1,65 @@
-import React, { useState } from 'react';
-import { Sun, Moon, LogOut, ChevronDown, Settings, CreditCard } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Sun, Moon, LogOut, ChevronDown, Settings, CreditCard, ShoppingBag } from 'lucide-react';
 import { useTheme } from '@/components/ThemeContext';
 import { useNavigate } from 'react-router-dom';
+import api from '@/services/api'; // Importe sua API
 import NotificationCenter from '@/components/NotificationCenter';
 import ModalSettings from '@/components/modals/ModalSettings'; 
 import ModalCard from '@/components/modals/ModalCard';
+import ModalCart from '@/components/modals/ModalCart';
 
 const Topbar = () => {
   const { isDarkMode, toggleTheme } = useTheme();
   const navigate = useNavigate();
   
+  // Estados de controle dos Modais
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false); 
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  
+  // Estado para a contagem do carrinho
+  const [cartCount, setCartCount] = useState(0);
 
+  // Inicialização do userData
   const [userData] = useState(() => {
     const rawName = localStorage.getItem('user_name');
     const rawUser = localStorage.getItem('user');
     let finalName = 'Usuário';
 
-    if (rawName) finalName = rawName;
-    else if (rawUser) {
+    if (rawName) {
+      finalName = rawName;
+    } else if (rawUser) {
       try {
         const parsed = JSON.parse(rawUser);
         finalName = parsed.name || parsed.username || 'Usuário';
-      } catch (e) { finalName = 'Usuário'; }
+      } catch (e) { 
+        finalName = 'Usuário'; 
+      }
     }
-    return { name: finalName, initial: finalName.charAt(0).toUpperCase() };
+    return { 
+      name: finalName, 
+      initial: finalName.charAt(0).toUpperCase() 
+    };
   });
+
+  // Busca a quantidade de itens no carrinho
+  const fetchCartCount = async () => {
+    try {
+      const res = await api.get('/cart');
+      setCartCount(Array.isArray(res.data) ? res.data.length : 0);
+    } catch (err) {
+      console.error("Erro ao buscar contagem do carrinho:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchCartCount();
+    // Atualiza a contagem quando o modal fecha (caso o usuário tenha deletado algo)
+    if (!isCartOpen) {
+      fetchCartCount();
+    }
+  }, [isCartOpen]);
 
   const handleLogout = () => {
     localStorage.clear();
@@ -43,22 +75,49 @@ const Topbar = () => {
       </div>
 
       <div className="flex items-center gap-1.5 md:gap-3">
-        {/* Componente Isolado */}
+        {/* Centro de Notificações */}
         <NotificationCenter />
 
-        <button onClick={toggleTheme} className="p-2.5 rounded-xl text-text-secondary hover:bg-bg-card hover:text-brand transition-all border border-transparent">
+        {/* Botão do Carrinho de Compras com Badge */}
+        <button 
+          onClick={() => setIsCartOpen(true)} 
+          className="relative p-2.5 rounded-xl text-text-secondary hover:bg-bg-card hover:text-brand transition-all border border-transparent group"
+          title="Carrinho de Compras"
+        >
+          <ShoppingBag size={20} className="group-hover:scale-110 transition-transform" />
+          
+          {cartCount > 0 && (
+            <span className="absolute top-1 right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand px-1 text-[9px] font-black text-white shadow-sm border-2 border-bg-main animate-in zoom-in">
+              {cartCount}
+            </span>
+          )}
+        </button>
+
+        {/* Botão de Alternar Tema */}
+        <button 
+          onClick={toggleTheme} 
+          className="p-2.5 rounded-xl text-text-secondary hover:bg-bg-card hover:text-brand transition-all border border-transparent"
+        >
           {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
+        {/* Menu do Usuário */}
         <div className="relative">
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className={`flex items-center gap-2 p-1.5 rounded-2xl transition-all border ${isMenuOpen ? 'bg-bg-card border-border-ui shadow-sm' : 'border-transparent'}`}
+            className={`flex items-center gap-2 p-1.5 rounded-2xl transition-all border ${
+              isMenuOpen ? 'bg-bg-card border-border-ui shadow-sm' : 'border-transparent'
+            }`}
           >
             <div className="w-9 h-9 rounded-xl bg-brand flex items-center justify-center text-white shadow-lg shadow-brand/20 font-black italic">
               {userData.initial}
             </div>
-            <ChevronDown size={14} className={`hidden md:block text-text-secondary transition-transform duration-300 ${isMenuOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown 
+              size={14} 
+              className={`hidden md:block text-text-secondary transition-transform duration-300 ${
+                isMenuOpen ? 'rotate-180' : ''
+              }`} 
+            />
           </button>
 
           {isMenuOpen && (
@@ -69,6 +128,7 @@ const Topbar = () => {
                   <p className="text-[9px] font-black text-text-secondary uppercase tracking-widest mb-1">Usuário</p>
                   <p className="text-xs font-bold text-text-primary truncate">{userData.name}</p>
                 </div>
+                
                 <div className="p-2 space-y-1">
                   <button
                     onClick={() => { setIsCardModalOpen(true); setIsMenuOpen(false); }}
@@ -86,7 +146,10 @@ const Topbar = () => {
                     <span className="text-[10px] font-black uppercase tracking-widest">Configurações</span>
                   </button>
 
-                  <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-500/10 transition-all">
+                  <button 
+                    onClick={handleLogout} 
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-500/10 transition-all"
+                  >
                     <LogOut size={16} />
                     <span className="text-[10px] font-black uppercase tracking-widest">Sair</span>
                   </button>
@@ -97,8 +160,10 @@ const Topbar = () => {
         </div>
       </div>
 
+      {/* Modais */}
       <ModalSettings isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       <ModalCard isOpen={isCardModalOpen} onClose={() => setIsCardModalOpen(false)} />
+      <ModalCart isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
     </header>
   );
 };

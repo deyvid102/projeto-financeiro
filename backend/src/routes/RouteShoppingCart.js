@@ -1,19 +1,17 @@
 import express from 'express';
-import cartController from '../controllers/ControlShoppingCart.js';
+// 1. Mudança aqui: Importamos tudo (*) como o objeto 'cartController'
+import * as cartController from '../controllers/ControlShoppingCart.js';
 import auth from '../middleware/AuthMiddleware.js';
 
 const router = express.Router();
 
-// @route   POST /api/cart
-router.post('/', auth, cartController.createItem);
+// Agora o cartController.createItem (e os outros) funcionará corretamente
+router.post('/', auth, cartController.createCartItem); // Verifique se o nome no controller é createCartItem
 
-// @route   GET /api/cart
-router.get('/', auth, cartController.getItems);
+router.get('/', auth, cartController.getCartItems);
 
-// @route   PUT /api/cart/:id
-router.put('/:id', auth, cartController.updateItem);
+router.put('/:id', auth, cartController.updateCartItem);
 
-// @route   DELETE /api/cart/:id
-router.delete('/:id', auth, cartController.deleteItem);
+router.delete('/:id', auth, cartController.deleteCartItem);
 
 export default router;

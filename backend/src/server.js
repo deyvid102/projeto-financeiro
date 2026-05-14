@@ -17,13 +17,14 @@ import routeGoal from "./routes/RouteGoal.js";
 import routeRecurrence from "./routes/RouteRecurrence.js";
 import routeCard from "./routes/RouteCard.js";
 import ShoppingCart from "./routes/RouteShoppingCart.js";
+// NOVO: Importação das rotas de anúncios inteligentes
+import routeShop from "./shop/shopRoutes.js"; 
 
 dotenv.config();
 
 const app = express();
 
 // O Render injeta a variável PORT automaticamente. 
-// O host "0.0.0.0" é essencial para o Render mapear o serviço corretamente.
 const PORT = process.env.PORT || 5000;
 
 // --- MIDDLEWARES ---
@@ -31,7 +32,6 @@ app.use(cors());
 app.use(express.json());
 
 // --- DEFINIÇÃO DAS ROTAS ---
-// Definimos as rotas antes da conexão para garantir que o app as registre no boot
 app.use('/api/users', routeUser);
 app.use('/api/transactions', routeTransaction);
 app.use('/api/investments', routeInvestment);
@@ -40,6 +40,9 @@ app.use('/api/goals', routeGoal);
 app.use('/api/recurrences', routeRecurrence);
 app.use('/api/cards', routeCard);
 app.use('/api/cart', ShoppingCart);
+// NOVO: Registro da rota do módulo shop
+app.use('/api/shop', routeShop); 
+
 app.get("/", (req, res) => {
   res.send("Servidor do financeMAX rodando corretamente no Render!");
 });
@@ -68,7 +71,6 @@ const startCronJobs = () => {
 
       if (tickers.length > 0) {
         console.log(`[CRON] ${tickers.length} tickers identificados para sync.`);
-        // Aqui você chamaria sua função de syncMarketPrices se necessário
       }
     } catch (err) {
       console.error("[CRON] Erro ao buscar investimentos no cron:", err.message);
@@ -86,21 +88,17 @@ const startServer = async () => {
       process.exit(1); 
     }
 
-    // Tenta conectar ao MongoDB
     await mongoose.connect(uri);
     console.log('✅ Conectado ao MongoDB com sucesso!');
 
-    // Inicia os agendamentos
     startCronJobs();
 
-    // Inicia o servidor escutando em 0.0.0.0 (Obrigatório para Render)
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`🚀 Servidor financeMAX rodando na porta: ${PORT}`);
     });
 
   } catch (error) {
     console.error('❌ Erro ao inicializar servidor:', error.message);
-    // Em produção, queremos que o processo pare para o Render tentar reiniciar
     process.exit(1);
   }
 };

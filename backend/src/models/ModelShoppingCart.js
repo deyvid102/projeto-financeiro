@@ -8,9 +8,10 @@ const shoppingCartSchema = new mongoose.Schema({
   },
   itemName: {
     type: String,
-    required: [true, 'Item name is required'],
+    required: [true, 'O nome do item é obrigatório'],
     trim: true
   },
+  // Este campo será preenchido automaticamente pela nossa lógica de 'Match'
   category: {
     type: String,
     required: [true, 'A categoria é obrigatória'],
@@ -29,13 +30,16 @@ const shoppingCartSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // Campo para armazenar o link de afiliado específico gerado para este item
+  affiliateLink: {
+    type: String,
+    default: ''
+  },
   createdAt: {
     type: Date,
     default: Date.now
   }
 });
 
-// REMOVA: module.exports = mongoose.model('ShoppingCart', shoppingCartSchema);
-// ADICIONE:
 const ShoppingCart = mongoose.model('ShoppingCart', shoppingCartSchema);
 export default ShoppingCart;

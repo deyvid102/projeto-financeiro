@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Sun, Moon, LogOut, ChevronDown, Settings, CreditCard, ShoppingBag } from 'lucide-react';
-import { useTheme } from '@/components/ThemeContext';
+import { LogOut, ChevronDown, Settings, CreditCard, ShoppingBag } from 'lucide-react'; // Removido Sun e Moon
 import { useNavigate } from 'react-router-dom';
-import api from '@/services/api'; // Importe sua API
+import api from '@/services/api'; 
 import NotificationCenter from '@/components/NotificationCenter';
 import ModalSettings from '@/components/modals/ModalSettings'; 
 import ModalCard from '@/components/modals/ModalCard';
 import ModalCart from '@/components/modals/ModalCart';
 
 const Topbar = () => {
-  const { isDarkMode, toggleTheme } = useTheme();
+  // Removido o hook useTheme
   const navigate = useNavigate();
   
   // Estados de controle dos Modais
@@ -55,7 +54,6 @@ const Topbar = () => {
 
   useEffect(() => {
     fetchCartCount();
-    // Atualiza a contagem quando o modal fecha (caso o usuário tenha deletado algo)
     if (!isCartOpen) {
       fetchCartCount();
     }
@@ -91,14 +89,6 @@ const Topbar = () => {
               {cartCount}
             </span>
           )}
-        </button>
-
-        {/* Botão de Alternar Tema */}
-        <button 
-          onClick={toggleTheme} 
-          className="p-2.5 rounded-xl text-text-secondary hover:bg-bg-card hover:text-brand transition-all border border-transparent"
-        >
-          {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
         {/* Menu do Usuário */}

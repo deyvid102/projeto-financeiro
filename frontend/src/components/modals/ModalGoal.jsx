@@ -1,22 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { X, Target, Check, Loader2, PiggyBank, Palette } from 'lucide-react';
+import { 
+  X, Target, Check, Loader2, PiggyBank, Palette, 
+  Heart, Star, ShoppingCart, Plane, Car, Home, 
+  GraduationCap, Briefcase, Trophy, Coffee 
+} from 'lucide-react';
 import api from '@/services/api';
 import { useAlert } from '../../context/AlertContext';
 import SelectStyle from '../SelectStyle';
 
-const ModalGoal = ({ isOpen, onClose, onRefresh }) => {
+// Mapeamento de componentes de ícone para renderização dinâmica
+const ICON_LIST = {
+  PiggyBank,
+  Heart,
+  Star,
+  ShoppingCart,
+  Plane,
+  Car,
+  Home,
+  GraduationCap,
+  Briefcase,
+  Trophy,
+  Coffee
+};
+
+const ModalGoal = ({ isOpen, onClose, onRefresh, goalToEdit = null }) => {
   const { showAlert } = useAlert();
   const [loading, setLoading] = useState(false);
-
-  const categories = [
-    { name: 'Emergência', value: 'emergencia' },
-    { name: 'Carro', value: 'carro' },
-    { name: 'Viagem', value: 'viagem' },
-    { name: 'Casa', value: 'casa' },
-    { name: 'Educação', value: 'educacao' },
-    { name: 'Lazer', value: 'lazer' },
-    { name: 'Outros', value: 'outros' }
-  ];
+  const [apiCategories, setApiCategories] = useState([]);
+  const [showIconPicker, setShowIconPicker] = useState(false); // Controle do mini-select de ícones
 
   const colors = [
     { name: 'Ciano', value: '#06b6d4' },
@@ -29,42 +40,73 @@ const ModalGoal = ({ isOpen, onClose, onRefresh }) => {
 
   const initialState = {
     name: '',
-    categoryGoal: 'outros',
+    categoryGoal: '',
     targetAmount: '',
-    color: '#06b6d4', // Cor inicial
+    color: '#06b6d4',
     icon: 'PiggyBank'
   };
 
   const [formData, setFormData] = useState(initialState);
 
+  // Componente que renderiza o ícone selecionado dinamicamente
+  const CurrentIcon = ICON_LIST[formData.icon] || PiggyBank;
+
   useEffect(() => {
-    if (!isOpen) {
-      setFormData(initialState);
+    const fetchCategories = async () => {
+      try {
+        const res = await api.get('/categories');
+        const formatted = res.data.map(cat => ({
+          name: cat.name,
+          value: cat.name
+        }));
+        setApiCategories(formatted);
+      } catch (err) {
+        console.error("Erro ao carregar categorias:", err);
+      }
+    };
+
+    if (isOpen) {
+      fetchCategories();
+      setShowIconPicker(false);
+      
+      if (goalToEdit) {
+        setFormData({
+          name: goalToEdit.name,
+          categoryGoal: goalToEdit.categoryGoal,
+          targetAmount: goalToEdit.targetAmount,
+          color: goalToEdit.color || '#06b6d4',
+          icon: goalToEdit.icon || 'PiggyBank'
+        });
+      } else {
+        setFormData(initialState);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, goalToEdit]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     
     try {
-      // Garantindo que todos os campos, incluindo a cor selecionada, sejam enviados
+      const id = goalToEdit?._id || goalToEdit?.id;
       const payload = {
-        name: formData.name,
-        categoryGoal: formData.categoryGoal,
+        ...formData,
         targetAmount: Number(formData.targetAmount),
-        color: formData.color, // A cor selecionada no estado
-        icon: formData.icon
       };
 
-      await api.post('/goals', payload);
+      if (goalToEdit) {
+        await api.patch(`/goals/${id}/balance`, payload);
+        showAlert('Caixinha atualizada com sucesso!', 'success');
+      } else {
+        await api.post('/goals', payload);
+        showAlert('Cofre criado com sucesso!', 'success');
+      }
       
-      showAlert('Cofre configurado com sucesso!', 'success');
       onRefresh();
       onClose();
     } catch (err) {
-      console.error("Erro ao salvar:", err);
-      showAlert('Erro ao criar caixinha', 'error');
+      console.error("Erro na API:", err.response?.data);
+      showAlert(err.response?.data?.message || 'Erro ao salvar alterações', 'error');
     } finally {
       setLoading(false);
     }
@@ -81,9 +123,11 @@ const ModalGoal = ({ isOpen, onClose, onRefresh }) => {
         <div className="flex justify-between items-center p-8 border-b border-border-ui/50">
           <div className="text-left">
             <h2 className="text-2xl font-black text-text-primary italic uppercase tracking-tighter">
-              Novo Cofre
+              {goalToEdit ? 'Editar Caixinha' : 'Novo Cofre'}
             </h2>
-            <p className="text-[10px] text-text-secondary font-black uppercase tracking-[0.2em] mt-1 opacity-60">Configuração de Objetivo</p>
+            <p className="text-[10px] text-text-secondary font-black uppercase tracking-[0.2em] mt-1 opacity-60">
+                {goalToEdit ? 'Atualizar Parâmetros' : 'Configuração de Objetivo'}
+            </p>
           </div>
           <button onClick={onClose} className="p-3 hover:bg-red-500/10 hover:text-red-500 rounded-2xl transition-all text-text-secondary cursor-pointer">
             <X size={20} strokeWidth={3} />
@@ -105,11 +149,11 @@ const ModalGoal = ({ isOpen, onClose, onRefresh }) => {
           </div>
 
           <div className="grid grid-cols-2 gap-4 overflow-visible">
-            <div className="relative z-50">
+            <div className="relative z-[110]">
               <SelectStyle 
                 label="Categoria"
                 value={formData.categoryGoal}
-                options={categories}
+                options={apiCategories}
                 onChange={(e) => setFormData({...formData, categoryGoal: e.target.value})}
               />
             </div>
@@ -132,8 +176,8 @@ const ModalGoal = ({ isOpen, onClose, onRefresh }) => {
               <Palette size={14} className="text-brand" />
               <label className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary block">Identidade Visual</label>
             </div>
-            {/* Seletor de Cores */}
-            <div className="flex justify-between items-center p-5 bg-bg-main rounded-[2rem] border border-border-ui shadow-inner">
+            
+            <div className="flex justify-between items-center p-5 bg-bg-main rounded-[2rem] border border-border-ui shadow-inner relative overflow-visible">
               <div className="flex gap-2.5">
                 {colors.map((c) => (
                   <button
@@ -150,8 +194,38 @@ const ModalGoal = ({ isOpen, onClose, onRefresh }) => {
                   />
                 ))}
               </div>
-              <div className="p-3 bg-bg-card rounded-2xl border border-border-ui">
-                <PiggyBank size={20} style={{ color: formData.color }} strokeWidth={2.5} className="transition-colors duration-200" />
+
+              {/* Seletor de Ícone */}
+              <div className="relative">
+                <button 
+                  type="button"
+                  onClick={() => setShowIconPicker(!showIconPicker)}
+                  className="p-3 bg-bg-card rounded-2xl border border-border-ui hover:border-brand transition-colors cursor-pointer"
+                >
+                  <CurrentIcon size={20} style={{ color: formData.color }} strokeWidth={2.5} className="transition-colors duration-200" />
+                </button>
+
+                {/* Popover de Ícones */}
+                {showIconPicker && (
+                  <div className="absolute bottom-full right-0 mb-4 p-4 bg-bg-card border border-border-ui rounded-3xl shadow-2xl grid grid-cols-4 gap-3 z-[150] w-[200px] animate-in fade-in zoom-in duration-200">
+                    {Object.keys(ICON_LIST).map((iconName) => {
+                      const IconItem = ICON_LIST[iconName];
+                      return (
+                        <button
+                          key={iconName}
+                          type="button"
+                          onClick={() => {
+                            setFormData({ ...formData, icon: iconName });
+                            setShowIconPicker(false);
+                          }}
+                          className={`p-2 rounded-xl hover:bg-brand/10 transition-colors flex items-center justify-center ${formData.icon === iconName ? 'bg-brand/20 text-brand' : 'text-text-secondary'}`}
+                        >
+                          <IconItem size={20} strokeWidth={2.5} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -161,7 +235,14 @@ const ModalGoal = ({ isOpen, onClose, onRefresh }) => {
             type="submit" 
             className="w-full bg-brand text-white py-5 rounded-[1.5rem] font-black uppercase text-[11px] tracking-[0.2em] shadow-xl shadow-brand/20 hover:shadow-brand/40 transition-all flex items-center justify-center gap-3 cursor-pointer active:scale-95 disabled:opacity-50"
           >
-            {loading ? <Loader2 className="animate-spin" size={18} strokeWidth={3} /> : <><Check size={18} strokeWidth={3} /> Ativar Caixinha</>}
+            {loading ? (
+                <Loader2 className="animate-spin" size={18} strokeWidth={3} /> 
+            ) : (
+                <>
+                    <Check size={18} strokeWidth={3} /> 
+                    {goalToEdit ? 'Salvar Alterações' : 'Ativar Caixinha'}
+                </>
+            )}
           </button>
         </form>
       </div>

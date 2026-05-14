@@ -33,8 +33,6 @@ export const createGoal = async (req, res) => {
   }
 };
 
-// @desc    Atualizar saldo e dados da caixinha
-// VOLTEI O NOME PARA updateBalance PARA CASAR COM SUAS ROTAS
 export const updateBalance = async (req, res) => {
   try {
     const { amount, type, name, categoryGoal, targetAmount, color, icon, deadline } = req.body;
@@ -45,34 +43,45 @@ export const updateBalance = async (req, res) => {
       return res.status(404).json({ message: 'Caixinha não encontrada' });
     }
 
-    // Lógica de Movimentação Financeira
-    if (amount) {
+    // --- LÓGICA FINANCEIRA (Apenas se houver movimentação) ---
+    // Verificamos se amount existe e é um número válido antes de calcular
+    if (amount !== undefined && amount !== null && amount !== "") {
       const value = Math.abs(Number(amount));
-      if (type === 'deposit') {
-        goal.currentAmount += value;
-      } else if (type === 'withdraw') {
-        if (goal.currentAmount < value) {
-          return res.status(400).json({ message: 'Saldo insuficiente' });
+      
+      if (!isNaN(value) && value > 0) {
+        if (type === 'deposit' || type === 'entrada') {
+          goal.currentAmount += value;
+        } else if (type === 'withdraw' || type === 'saida') {
+          if (goal.currentAmount < value) {
+            return res.status(400).json({ message: 'Saldo insuficiente na caixinha' });
+          }
+          goal.currentAmount -= value;
         }
-        goal.currentAmount -= value;
       }
     }
 
-    // Lógica de Atualização de Campos (Cor, Nome, etc)
-    if (name) goal.name = name;
-    if (categoryGoal) goal.categoryGoal = categoryGoal;
-    if (targetAmount) goal.targetAmount = Number(targetAmount);
-    if (color) goal.color = color;
-    if (icon) goal.icon = icon;
-    if (deadline) goal.deadline = deadline;
+    // --- LÓGICA DE EDIÇÃO (Campos de texto e visual) ---
+    if (name !== undefined) goal.name = name;
+    if (categoryGoal !== undefined) goal.categoryGoal = categoryGoal;
+    if (color !== undefined) goal.color = color;
+    if (icon !== undefined) goal.icon = icon;
+    if (deadline !== undefined) goal.deadline = deadline;
 
-    // Recalcula o status
+    // Atualização da Meta (Garante que seja número)
+    if (targetAmount !== undefined && targetAmount !== "") {
+      const numTarget = Number(targetAmount);
+      if (!isNaN(numTarget)) goal.targetAmount = numTarget;
+    }
+
+    // Recalcula o status automaticamente
     goal.status = goal.currentAmount >= goal.targetAmount ? 'concluido' : 'ativo';
 
     await goal.save();
     res.json(goal);
   } catch (err) {
-    res.status(500).json({ message: 'Erro ao atualizar caixinha' });
+    // Importante: Logar o erro no terminal do seu servidor para você ver o que quebrou
+    console.error("ERRO NO BACKEND:", err); 
+    res.status(500).json({ message: 'Erro interno ao atualizar caixinha', error: err.message });
   }
 };
 

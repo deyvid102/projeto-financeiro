@@ -13,8 +13,6 @@ const GoalSchema = new mongoose.Schema({
   },
   categoryGoal: {
     type: String,
-    enum: ['emergencia', 'carro', 'viagem', 'casa', 'educacao', 'lazer', 'outros'],
-    default: 'outros'
   },
   targetAmount: {
     type: Number,

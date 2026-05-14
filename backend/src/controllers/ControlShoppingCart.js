@@ -1,5 +1,5 @@
 import ShoppingCart from '../models/ModelShoppingCart.js';
-import { CATEGORY_DATA } from '../shop/categoryData.js'; // Importando o mapeamento de links
+import { CATEGORY_DATA } from '../shop/CategoryData.js'; // Importando o mapeamento de links
 
 // Função auxiliar para descobrir categoria e link baseado no nome
 const getAffiliateMatch = (itemName) => {

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   DollarSign, PieChart as PieIcon, ChevronRight, Search, 
   X, ArrowUpCircle, ArrowDownCircle, Target, Calendar, TrendingUp, 
-  TrendingDown, ChevronLeft, Filter, Check, Wallet, CreditCard
+  TrendingDown, ChevronLeft, Filter, Check, Wallet, CreditCard, AlertCircle
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -11,8 +11,28 @@ import {
 import api from '@/services/api';
 import LoadingState from '@/components/LoadingState';
 
+// --- COMPONENTE: SIDEBAR DE FILTROS (AGORA COM ESTADO INTERNO) ---
 const FilterSidebar = ({ isOpen, onClose, filters, setFilters }) => {
+  // Estado local para não travar o painel principal enquanto o usuário escolhe
+  const [draftFilters, setDraftFilters] = useState(filters);
+
+  // Sincroniza o rascunho com os filtros reais sempre que abrir a sidebar
+  useEffect(() => {
+    if (isOpen) setDraftFilters(filters);
+  }, [isOpen, filters]);
+
   if (!isOpen) return null;
+
+  // Validação de datas
+  const isDateInvalid = draftFilters.timeRange === 'custom' && 
+    draftFilters.startDate && draftFilters.endDate && 
+    new Date(draftFilters.startDate) > new Date(draftFilters.endDate);
+
+  const handleApply = () => {
+    if (isDateInvalid) return;
+    setFilters(draftFilters); // Só aqui o painel principal é atualizado
+    onClose();
+  };
 
   return (
     <>
@@ -32,13 +52,13 @@ const FilterSidebar = ({ isOpen, onClose, filters, setFilters }) => {
               {['todos', 'entrada', 'saida'].map(t => (
                 <button 
                   key={t}
-                  onClick={() => setFilters({ ...filters, viewType: t })}
+                  onClick={() => setDraftFilters({ ...draftFilters, viewType: t })}
                   className={`flex items-center justify-between px-3 py-2.5 rounded-lg border uppercase text-[8px] font-black tracking-widest ${
-                    filters.viewType === t ? 'bg-brand/10 border-brand text-brand' : 'bg-bg-main/50 border-border-ui/50 text-text-secondary'
+                    draftFilters.viewType === t ? 'bg-brand/10 border-brand text-brand' : 'bg-bg-main/50 border-border-ui/50 text-text-secondary'
                   }`}
                 >
                   {t}
-                  {filters.viewType === t && <Check size={12} />}
+                  {draftFilters.viewType === t && <Check size={12} />}
                 </button>
               ))}
             </div>
@@ -46,29 +66,64 @@ const FilterSidebar = ({ isOpen, onClose, filters, setFilters }) => {
 
           <section>
             <p className="text-[8px] font-black text-brand uppercase tracking-[0.2em] mb-3">Período Analítico</p>
-            <div className="grid grid-cols-1 gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5 mb-4">
               {[
                 { id: '7d', label: 'Últimos 7 dias' },
                 { id: '30d', label: 'Últimos 30 dias' },
                 { id: '12m', label: 'Último Ano (12M)' },
-                { id: 'custom', label: 'Personalizado' }
+                { id: 'custom', label: 'Período Específico' }
               ].map(r => (
                 <button 
                   key={r.id}
-                  onClick={() => setFilters({ ...filters, timeRange: r.id })}
+                  onClick={() => setDraftFilters({ ...draftFilters, timeRange: r.id })}
                   className={`flex items-center justify-between px-3 py-2.5 rounded-lg border uppercase text-[8px] font-black tracking-widest text-left ${
-                    filters.timeRange === r.id ? 'bg-text-primary/10 border-text-primary text-text-primary' : 'bg-bg-main/50 border-border-ui/50 text-text-secondary'
+                    draftFilters.timeRange === r.id ? 'bg-text-primary/10 border-text-primary text-text-primary' : 'bg-bg-main/50 border-border-ui/50 text-text-secondary'
                   }`}
                 >
                   {r.label}
-                  {filters.timeRange === r.id && <Check size={12} />}
+                  {draftFilters.timeRange === r.id && <Check size={12} />}
                 </button>
               ))}
             </div>
+
+            {draftFilters.timeRange === 'custom' && (
+              <div className="grid grid-cols-1 gap-3 p-3 bg-bg-main/30 rounded-xl border border-border-ui/50 animate-in fade-in slide-in-from-top-2">
+                <div>
+                  <label className="text-[7px] font-black text-text-secondary uppercase mb-1 block">Início</label>
+                  <input 
+                    type="date" 
+                    value={draftFilters.startDate}
+                    onChange={(e) => setDraftFilters({ ...draftFilters, startDate: e.target.value })}
+                    className="w-full bg-bg-card border border-border-ui rounded-md px-2 py-1.5 text-[10px] text-text-primary focus:outline-none focus:border-brand"
+                  />
+                </div>
+                <div>
+                  <label className="text-[7px] font-black text-text-secondary uppercase mb-1 block">Fim</label>
+                  <input 
+                    type="date" 
+                    value={draftFilters.endDate}
+                    onChange={(e) => setDraftFilters({ ...draftFilters, endDate: e.target.value })}
+                    className={`w-full bg-bg-card border rounded-md px-2 py-1.5 text-[10px] text-text-primary focus:outline-none ${isDateInvalid ? 'border-red-500' : 'border-border-ui focus:border-brand'}`}
+                  />
+                </div>
+                {isDateInvalid && (
+                  <div className="flex items-center gap-1 text-red-500 mt-1">
+                    <AlertCircle size={10} />
+                    <span className="text-[7px] font-black uppercase">Data fim inválida</span>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
         </div>
 
-        <button onClick={onClose} className="w-full bg-brand py-3 rounded-xl text-white text-[9px] font-black uppercase tracking-[0.2em] mt-6 active:scale-95 transition-transform">
+        <button 
+          onClick={handleApply}
+          disabled={isDateInvalid}
+          className={`w-full py-3 rounded-xl text-white text-[9px] font-black uppercase tracking-[0.2em] mt-6 transition-all ${
+            isDateInvalid ? 'bg-gray-600 opacity-50 cursor-not-allowed' : 'bg-brand active:scale-95'
+          }`}
+        >
           Aplicar Filtros
         </button>
       </div>
@@ -76,26 +131,53 @@ const FilterSidebar = ({ isOpen, onClose, filters, setFilters }) => {
   );
 };
 
+// --- COMPONENTE: MODAL DE EXTRATO MENSAL ---
 const MonthSummaryModal = ({ isOpen, onClose, transactions }) => {
   const [viewDate, setViewDate] = useState(new Date());
 
   const summaryData = useMemo(() => {
+    if (!isOpen) return { days: [], totalIn: 0, totalOut: 0, net: 0, period: '' };
     const year = viewDate.getFullYear();
     const month = viewDate.getMonth();
     const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
     const lastDay = new Date(year, month + 1, 0).getDate();
     const daysArray = [];
     let monthlyIn = 0, monthlyOut = 0;
 
     for (let i = 1; i <= lastDay; i++) {
       const cur = new Date(year, month, i);
-      const dayTransactions = transactions.filter(t => new Date(t.date).toDateString() === cur.toDateString());
-      const inVal = dayTransactions.filter(t => t.type === 'entrada').reduce((acc, t) => acc + t.amount, 0);
-      const outVal = dayTransactions.filter(t => t.type === 'saida').reduce((acc, t) => acc + t.amount, 0);
-      monthlyIn += inVal; monthlyOut += outVal;
-      daysArray.push({ day: i, label: `${i < 10 ? '0'+i : i}/${(month+1)<10 ? '0'+(month+1) : (month+1)}`, isFuture: cur > now, isToday: cur.toDateString() === now.toDateString(), in: inVal, out: outVal, balance: inVal - outVal, hasActivity: dayTransactions.length > 0 });
+      const dayTransactions = (transactions || []).filter(t => {
+        if (!t.date) return false;
+        const [tYear, tMonth, tDay] = t.date.split('T')[0].split('-').map(Number);
+        return tYear === year && tMonth === (month + 1) && tDay === i;
+      });
+
+      const inVal = dayTransactions.filter(t => t.type === 'entrada').reduce((acc, t) => acc + Number(t.amount || 0), 0);
+      const outVal = dayTransactions.filter(t => t.type === 'saida').reduce((acc, t) => acc + Number(t.amount || 0), 0);
+      monthlyIn += inVal; 
+      monthlyOut += outVal;
+
+      daysArray.push({ 
+        day: i, 
+        label: `${i < 10 ? '0'+i : i}/${(month+1)<10 ? '0'+(month+1) : (month+1)}`, 
+        isFuture: cur > now, 
+        isToday: cur.getTime() === now.getTime(), 
+        in: inVal, 
+        out: outVal, 
+        balance: inVal - outVal, 
+        hasActivity: dayTransactions.length > 0 
+      });
     }
-    return { days: daysArray, totalIn: monthlyIn, totalOut: monthlyOut, net: monthlyIn - monthlyOut, period: viewDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) };
+
+    return { 
+      days: daysArray, 
+      totalIn: monthlyIn, 
+      totalOut: monthlyOut, 
+      net: monthlyIn - monthlyOut, 
+      period: viewDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) 
+    };
   }, [transactions, viewDate, isOpen]);
 
   if (!isOpen) return null;
@@ -136,6 +218,7 @@ const MonthSummaryModal = ({ isOpen, onClose, transactions }) => {
   );
 };
 
+// --- COMPONENTE PRINCIPAL: EXPENSES PANEL ---
 const ExpensesPanel = () => {
   const [allTransactions, setAllTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -146,7 +229,8 @@ const ExpensesPanel = () => {
   const [filters, setFilters] = useState({
     viewType: 'todos',
     timeRange: '12m',
-    customRange: { start: '', end: '' }
+    startDate: '', 
+    endDate: ''    
   });
 
   useEffect(() => {
@@ -164,67 +248,131 @@ const ExpensesPanel = () => {
     fetchData();
   }, []);
 
+  // --- FILTRAGEM ---
   const filteredData = useMemo(() => {
-    const now = new Date();
-    return allTransactions.filter(t => {
+    return (allTransactions || []).filter(t => {
+      if (!t.date) return false;
       const tDate = new Date(t.date);
+      tDate.setHours(0, 0, 0, 0);
+
       const matchType = filters.viewType === 'todos' ? true : t.type === filters.viewType;
       let matchTime = true;
+      const now = new Date();
+      now.setHours(23, 59, 59, 999);
+
       if (filters.timeRange === '7d') {
-        const d = new Date(); d.setDate(now.getDate() - 7);
-        matchTime = tDate >= d;
+        const limit = new Date(); limit.setDate(now.getDate() - 7);
+        matchTime = tDate >= limit;
       } else if (filters.timeRange === '30d') {
-        const d = new Date(); d.setMonth(now.getMonth() - 1);
-        matchTime = tDate >= d;
+        const limit = new Date(); limit.setMonth(now.getMonth() - 1);
+        matchTime = tDate >= limit;
       } else if (filters.timeRange === '12m') {
-        const d = new Date(); d.setFullYear(now.getFullYear() - 1);
-        matchTime = tDate >= d;
+        const limit = new Date(); limit.setFullYear(now.getFullYear() - 1);
+        matchTime = tDate >= limit;
+      } else if (filters.timeRange === 'custom') {
+        if (filters.startDate && filters.endDate) {
+          const [sY, sM, sD] = filters.startDate.split('-').map(Number);
+          const [eY, eM, eD] = filters.endDate.split('-').map(Number);
+          const start = new Date(sY, sM - 1, sD, 0, 0, 0);
+          const end = new Date(eY, eM - 1, eD, 23, 59, 59);
+          matchTime = tDate >= start && tDate <= end;
+        } else {
+          matchTime = false;
+        }
       }
       return matchType && matchTime;
     });
   }, [allTransactions, filters]);
 
-  const summary = useMemo(() => {
-    const income = allTransactions.filter(t => t.type === 'entrada').reduce((acc, curr) => acc + Number(curr.amount), 0);
-    const expense = allTransactions.filter(t => t.type === 'saida').reduce((acc, curr) => acc + Number(curr.amount), 0);
-    return { income, expense, balance: income - expense };
-  }, [allTransactions]);
-
+  // --- STATS CONSOLIDADOS ---
   const stats = useMemo(() => {
-    const totalOut = filteredData.filter(t => t.type === 'saida').reduce((acc, curr) => acc + curr.amount, 0);
-    const totalIn = filteredData.filter(t => t.type === 'entrada').reduce((acc, curr) => acc + curr.amount, 0);
-    return { totalOut, totalIn, totalVolume: totalIn + totalOut };
+    const totalIn = filteredData.filter(t => t.type === 'entrada').reduce((acc, t) => acc + Number(t.amount || 0), 0);
+    const totalOut = filteredData.filter(t => t.type === 'saida').reduce((acc, t) => acc + Number(t.amount || 0), 0);
+    return {
+      totalIn,
+      totalOut,
+      balance: totalIn - totalOut,
+      totalVolume: totalIn + totalOut
+    };
   }, [filteredData]);
 
+  // --- GRÁFICO COM GRANULARIDADE ---
   const chartData = useMemo(() => {
-    if (filters.timeRange === '12m') {
-      return ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((name, index) => {
-        const mData = filteredData.filter(t => new Date(t.date).getMonth() === index);
-        return { name, entrada: mData.filter(t => t.type === 'entrada').reduce((a, b) => a + b.amount, 0), saida: -mData.filter(t => t.type === 'saida').reduce((a, b) => a + b.amount, 0) };
-      });
+    if (filteredData.length === 0) return [];
+    let startDate, endDate;
+
+    if (filters.timeRange === 'custom' && filters.startDate && filters.endDate) {
+      const [sY, sM, sD] = filters.startDate.split('-').map(Number);
+      const [eY, eM, eD] = filters.endDate.split('-').map(Number);
+      startDate = new Date(sY, sM - 1, sD);
+      endDate = new Date(eY, eM - 1, eD);
+    } else {
+      const sortedDates = [...filteredData].sort((a, b) => new Date(a.date) - new Date(b.date));
+      startDate = new Date(sortedDates[0].date);
+      endDate = new Date(sortedDates[sortedDates.length - 1].date);
     }
-    const days = filters.timeRange === '7d' ? 7 : 30;
-    const data = []; const now = new Date();
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(); d.setDate(now.getDate() - i);
-      const dayT = filteredData.filter(t => new Date(t.date).toDateString() === d.toDateString());
-      data.push({ name: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }), entrada: dayT.filter(t => t.type === 'entrada').reduce((a, b) => a + b.amount, 0), saida: -dayT.filter(t => t.type === 'saida').reduce((a, b) => a + b.amount, 0) });
+
+    const diffDays = Math.ceil(Math.abs(endDate - startDate) / (1000 * 60 * 60 * 24));
+    const data = [];
+
+    if (diffDays <= 15) {
+      for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+        const dayStr = d.toISOString().split('T')[0];
+        const dayT = filteredData.filter(t => t.date.split('T')[0] === dayStr);
+        data.push({
+          name: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+          entrada: dayT.filter(t => t.type === 'entrada').reduce((a, b) => a + Number(b.amount || 0), 0),
+          saida: -dayT.filter(t => t.type === 'saida').reduce((a, b) => a + Number(b.amount || 0), 0)
+        });
+      }
+    } else if (diffDays <= 366) {
+      let current = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      const last = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+      while (current <= last) {
+        const m = current.getMonth();
+        const y = current.getFullYear();
+        const monthT = filteredData.filter(t => {
+          const d = new Date(t.date);
+          return d.getMonth() === m && d.getFullYear() === y;
+        });
+        data.push({
+          name: current.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).toUpperCase(),
+          entrada: monthT.filter(t => t.type === 'entrada').reduce((a, b) => a + Number(b.amount || 0), 0),
+          saida: -monthT.filter(t => t.type === 'saida').reduce((a, b) => a + Number(b.amount || 0), 0)
+        });
+        current.setMonth(current.getMonth() + 1);
+      }
+    } else {
+      for (let y = startDate.getFullYear(); y <= endDate.getFullYear(); y++) {
+        const yearT = filteredData.filter(t => new Date(t.date).getFullYear() === y);
+        data.push({
+          name: y.toString(),
+          entrada: yearT.filter(t => t.type === 'entrada').reduce((a, b) => a + Number(b.amount || 0), 0),
+          saida: -yearT.filter(t => t.type === 'saida').reduce((a, b) => a + Number(b.amount || 0), 0)
+        });
+      }
     }
     return data;
-  }, [filteredData, filters.timeRange]);
+  }, [filteredData, filters]);
 
   const categoryData = useMemo(() => {
     const cats = {};
-    filteredData.forEach(t => { cats[t.category] = (cats[t.category] || 0) + t.amount; });
-    return Object.entries(cats).map(([name, value]) => ({ name, value, percent: stats.totalVolume > 0 ? (value / stats.totalVolume) * 100 : 0 })).sort((a, b) => b.value - a.value);
+    filteredData.forEach(t => { 
+      if (t.category) cats[t.category] = (cats[t.category] || 0) + Number(t.amount || 0); 
+    });
+    return Object.entries(cats).map(([name, value]) => ({ 
+      name, 
+      value, 
+      percent: stats.totalVolume > 0 ? (value / stats.totalVolume) * 100 : 0 
+    })).sort((a, b) => b.value - a.value);
   }, [filteredData, stats.totalVolume]);
 
   const cardsOverview = useMemo(() => {
-    const creditCards = cards.filter((c) => c.type === 'credito');
+    const creditCards = (cards || []).filter((c) => c.type === 'credito');
     const used = creditCards.reduce((acc, c) => acc + Number(c.usedLimit || 0), 0);
     const limit = creditCards.reduce((acc, c) => acc + Number(c.creditLimit || 0), 0);
-    const va = cards.filter((c) => c.type === 'vale_alimentacao').reduce((acc, c) => acc + Number(c.vaBalance || 0), 0);
-    return { total: cards.length, used, available: limit - used, va };
+    const va = (cards || []).filter((c) => c.type === 'vale_alimentacao').reduce((acc, c) => acc + Number(c.vaBalance || 0), 0);
+    return { total: (cards || []).length, used, available: limit - used, va };
   }, [cards]);
 
   if (loading) return <LoadingState message="PROCESSANDO FLUXO ESTRATÉGICO..." />;
@@ -254,10 +402,10 @@ const ExpensesPanel = () => {
           <div className="flex flex-col md:border-r border-border-ui/30 pr-2">
             <div className="flex items-center gap-1.5 mb-0.5">
               <Wallet size={10} className="text-brand opacity-60" />
-              <span className="text-[7px] md:text-[8px] text-text-secondary font-black uppercase tracking-widest opacity-60">Saldo Global</span>
+              <span className="text-[7px] md:text-[8px] text-text-secondary font-black uppercase tracking-widest opacity-60">Saldo Período</span>
             </div>
             <h2 className="text-base md:text-2xl font-black text-text-primary italic tracking-tighter truncate">
-              {summary.balance.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
+              {stats.balance.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
             </h2>
           </div>
 
@@ -267,7 +415,7 @@ const ExpensesPanel = () => {
               <span className="text-[7px] md:text-[8px] text-text-secondary font-black uppercase tracking-widest opacity-60">Receitas</span>
             </div>
             <h2 className="text-sm md:text-xl font-black text-emerald-500 italic tracking-tighter truncate">
-              {summary.income.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
+              {stats.totalIn.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
             </h2>
           </div>
 
@@ -277,7 +425,7 @@ const ExpensesPanel = () => {
               <span className="text-[7px] md:text-[8px] text-text-secondary font-black uppercase tracking-widest opacity-60">Despesas</span>
             </div>
             <h2 className="text-sm md:text-xl font-black text-red-500 italic tracking-tighter truncate">
-              {summary.expense.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
+              {stats.totalOut.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
             </h2>
           </div>
         </div>
@@ -288,29 +436,36 @@ const ExpensesPanel = () => {
           <DollarSign size={12} className="text-brand" /> Fluxo Consolidado
         </h3>
         <div className="h-[220px] md:h-[300px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} stackOffset="sign">
-              <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.05} />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 7, fontWeight: 900, fill: '#94a3b8'}} dy={10}/>
-              <YAxis hide />
-              <Tooltip cursor={{fill: 'rgba(255, 255, 255, 0.03)'}} content={({ active, payload }) => {
-                if (active && payload && payload.length) {
-                  const d = payload[0].payload;
-                  return (
-                    <div className="bg-bg-card p-2 rounded-xl border border-border-ui shadow-2xl text-left">
-                      <p className="text-[8px] font-black uppercase text-brand mb-1">{d.name}</p>
-                      <p className="text-[9px] font-bold text-emerald-500">In: R$ {d.entrada.toFixed(2)}</p>
-                      <p className="text-[9px] font-bold text-red-500">Out: R$ {Math.abs(d.saida).toFixed(2)}</p>
-                    </div>
-                  );
-                }
-                return null;
-              }} />
-              <ReferenceLine y={0} stroke="var(--border-ui)" strokeWidth={1} />
-              <Bar isAnimationActive={false} dataKey="entrada" fill="#10b981" radius={[4, 4, 0, 0]} barSize={filters.timeRange === '12m' ? 18 : 8} />
-              <Bar isAnimationActive={false} dataKey="saida" fill="#ef4444" radius={[0, 0, 4, 4]} barSize={filters.timeRange === '12m' ? 18 : 8} />
-            </BarChart>
-          </ResponsiveContainer>
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} stackOffset="sign">
+                <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.05} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 7, fontWeight: 900, fill: '#94a3b8'}} dy={10}/>
+                <YAxis hide />
+                <Tooltip cursor={{fill: 'rgba(255, 255, 255, 0.03)'}} content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    const d = payload[0].payload;
+                    return (
+                      <div className="bg-bg-card p-2 rounded-xl border border-border-ui shadow-2xl text-left">
+                        <p className="text-[8px] font-black uppercase text-brand mb-1">{d.name}</p>
+                        <p className="text-[9px] font-bold text-emerald-500">In: R$ {d.entrada.toFixed(2)}</p>
+                        <p className="text-[9px] font-bold text-red-500">Out: R$ {Math.abs(d.saida).toFixed(2)}</p>
+                      </div>
+                    );
+                  }
+                  return null;
+                }} />
+                <ReferenceLine y={0} stroke="var(--border-ui)" strokeWidth={1} />
+                <Bar isAnimationActive={false} dataKey="entrada" fill="#10b981" radius={[4, 4, 0, 0]} barSize={filters.timeRange === '12m' ? 18 : 8} />
+                <Bar isAnimationActive={false} dataKey="saida" fill="#ef4444" radius={[0, 0, 4, 4]} barSize={filters.timeRange === '12m' ? 18 : 8} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center text-text-secondary">
+               <Calendar size={24} className="opacity-20 mb-2" />
+               <p className="text-[10px] font-black uppercase tracking-widest opacity-40 italic">Aguardando período válido...</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -339,7 +494,7 @@ const ExpensesPanel = () => {
             <ChevronRight size={10} className="text-brand"/> Categorias
           </h3>
           <div className="space-y-4">
-            {categoryData.slice(0, 4).map((item) => (
+            {categoryData.length > 0 ? categoryData.slice(0, 4).map((item) => (
               <div key={item.name}>
                 <div className="flex justify-between text-[8px] font-black uppercase mb-1">
                   <span className="text-text-primary">{item.name}</span>
@@ -349,7 +504,7 @@ const ExpensesPanel = () => {
                   <div className="h-full bg-brand" style={{ width: `${item.percent}%` }} />
                 </div>
               </div>
-            ))}
+            )) : <p className="text-[8px] uppercase font-black opacity-20">Sem dados...</p>}
           </div>
         </div>
         

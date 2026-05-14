@@ -2,39 +2,54 @@ import React, { useMemo } from 'react';
 import { X, ArrowUpCircle, ArrowDownCircle, Target, Calendar, PieChart } from 'lucide-react';
 
 const MonthSummaryModal = ({ isOpen, onClose, transactions }) => {
-  const summary = useMemo(() => {
+  const [viewDate, setViewDate] = useState(new Date());
+
+  const summaryData = useMemo(() => {
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
     const now = new Date();
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    // Zera as horas para comparação justa
+    now.setHours(0, 0, 0, 0);
 
-    const monthTransactions = transactions.filter(t => {
-      const d = new Date(t.date);
-      return d >= firstDay && d <= lastDay;
-    });
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const daysArray = [];
+    let monthlyIn = 0, monthlyOut = 0;
 
-    const income = monthTransactions.filter(t => t.type === 'entrada').reduce((acc, t) => acc + t.amount, 0);
-    const expenses = monthTransactions.filter(t => t.type === 'saida').reduce((acc, t) => acc + t.amount, 0);
-    
-    // Agrupar por categoria
-    const categories = {};
-    monthTransactions.filter(t => t.type === 'saida').forEach(t => {
-      categories[t.category] = (categories[t.category] || 0) + t.amount;
-    });
+    for (let i = 1; i <= lastDay; i++) {
+      const cur = new Date(year, month, i);
+      
+      // Filtro robusto ignorando fuso horário
+      const dayTransactions = transactions.filter(t => {
+        const [tYear, tMonth, tDay] = t.date.split('T')[0].split('-').map(Number);
+        return tYear === year && tMonth === (month + 1) && tDay === i;
+      });
 
-    const topCategories = Object.entries(categories)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 4);
+      const inVal = dayTransactions.filter(t => t.type === 'entrada').reduce((acc, t) => acc + Number(t.amount), 0);
+      const outVal = dayTransactions.filter(t => t.type === 'saida').reduce((acc, t) => acc + Number(t.amount), 0);
+      
+      monthlyIn += inVal; 
+      monthlyOut += outVal;
 
-    return {
-      income,
-      expenses,
-      balance: income - expenses,
-      count: monthTransactions.length,
-      topCategories,
-      period: now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+      daysArray.push({ 
+        day: i, 
+        label: `${i < 10 ? '0'+i : i}/${(month+1)<10 ? '0'+(month+1) : (month+1)}`, 
+        isFuture: cur > now, 
+        isToday: cur.getTime() === now.getTime(), 
+        in: inVal, 
+        out: outVal, 
+        balance: inVal - outVal, 
+        hasActivity: dayTransactions.length > 0 
+      });
+    }
+
+    return { 
+      days: daysArray, 
+      totalIn: monthlyIn, 
+      totalOut: monthlyOut, 
+      net: monthlyIn - monthlyOut, 
+      period: viewDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) 
     };
-  }, [transactions, isOpen]);
+  }, [transactions, viewDate, isOpen]);
 
   if (!isOpen) return null;
 
@@ -56,7 +71,6 @@ const MonthSummaryModal = ({ isOpen, onClose, transactions }) => {
             <X size={24} strokeWidth={3} />
           </button>
         </div>
-
         {/* Content */}
         <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar">
           

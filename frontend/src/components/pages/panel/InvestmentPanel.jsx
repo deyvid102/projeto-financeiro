@@ -147,17 +147,70 @@ const InvestmentPanel = () => {
   const rendimentoTotal = totalAtual - totalInvestido;
   const valorSacadoTotal = useMemo(() => historicoComValores.reduce((acc, inv) => acc + inv.valorSacado, 0), [historicoComValores]);
 
-  const multiSeriesData = useMemo(() => {
-    const labels = [{ id: 'start', name: 'Valor inicial' }, { id: 'current', name: 'Atual' }];
-    return labels.map((label) => {
-      const dataPoint = { name: label.name };
-      ativos.forEach(inv => {
-        const key = inv.ticker || inv.name;
-        dataPoint[key] = label.id === 'start' ? Number(inv.amountInvested || 0) : Number(inv.currentTotalValue || 0);
+const multiSeriesData = useMemo(() => {
+  if (ativos.length === 0) return [];
+
+  const now = new Date();
+  const points = [];
+  const isYearly = timeFilter === '12M';
+
+  if (isYearly) {
+    // Lógica para 12 Meses (1 ponto por mês)
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      points.push({
+        timestamp: date.getTime(),
+        display: date.toLocaleDateString('pt-BR', { month: 'short' }).toUpperCase(),
+        isLastPoint: i === 0
       });
-      return dataPoint;
+    }
+  } else {
+    // Lógica para 30 Dias (mantém diário, mas limitado a 30 pontos)
+    for (let i = 30; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(now.getDate() - i);
+      points.push({
+        timestamp: date.getTime(),
+        display: date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        isLastPoint: i === 0
+      });
+    }
+  }
+
+  return points.map(point => {
+    const dataPoint = { name: point.display };
+    
+    ativos.forEach(inv => {
+      const dataAporte = new Date(inv.createdAt || inv.date).getTime();
+      const key = inv.ticker || inv.name;
+
+      // Se o aporte foi feito depois desta data, o valor é zero
+      if (point.timestamp < dataAporte && !point.isLastPoint) {
+        dataPoint[key] = 0;
+        return;
+      }
+
+      const valorInicial = Number(inv.amountInvested || 0);
+      const valorAtual = Number(inv.currentTotalValue || 0);
+      
+      // Cálculo de progresso temporal
+      const tempoTotal = now.getTime() - dataAporte;
+      const tempoDecorrido = point.timestamp - dataAporte;
+      const progresso = Math.max(0, Math.min(1, tempoDecorrido / tempoTotal));
+
+      // Se for o último ponto, garante o valor real atualizado
+      if (point.isLastPoint) {
+        dataPoint[key] = valorAtual;
+      } else {
+        // Interpolação linear simples para o gráfico
+        const valorNaData = valorInicial + ((valorAtual - valorInicial) * progresso);
+        dataPoint[key] = Number(valorNaData.toFixed(2));
+      }
     });
-  }, [ativos]);
+
+    return dataPoint;
+  });
+}, [ativos, timeFilter]);
 
   const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#ef4444'];
 

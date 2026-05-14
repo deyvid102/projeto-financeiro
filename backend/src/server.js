@@ -18,7 +18,7 @@ import routeRecurrence from "./routes/RouteRecurrence.js";
 import routeCard from "./routes/RouteCard.js";
 import ShoppingCart from "./routes/RouteShoppingCart.js";
 // NOVO: Importação das rotas de anúncios inteligentes
-import routeShop from "./shop/shopRoutes.js"; 
+import routeShop from "./shop/ShopRoutes.js"; 
 
 dotenv.config();
 

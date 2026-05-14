@@ -1,5 +1,5 @@
 import ShoppingCart from '../models/ModelShoppingCart.js';
-import { CATEGORY_DATA } from './categoryData.js';
+import { CATEGORY_DATA } from './CategoryData.js';
 
 /**
  * Cria um item na wishlist com inteligência de categoria e link de afiliado

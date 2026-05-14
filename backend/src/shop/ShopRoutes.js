@@ -1,5 +1,5 @@
 import express from 'express';
-import { createSmartItem, getUserWishlist } from './shopController.js';
+import { createSmartItem, getUserWishlist } from './ShopController.js';
 // Importe seu middleware de autenticação (exemplo: protect ou auth)
 // import { protect } from '../middleware/authMiddleware.js';
 

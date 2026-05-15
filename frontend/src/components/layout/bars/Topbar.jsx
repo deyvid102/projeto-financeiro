@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, ChevronDown, Settings, CreditCard, ShoppingBag } from 'lucide-react'; // Removido Sun e Moon
+import { LogOut, ChevronDown, Settings, CreditCard, ShoppingBag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '@/services/api'; 
 import NotificationCenter from '@/components/NotificationCenter';
@@ -8,19 +8,16 @@ import ModalCard from '@/components/modals/ModalCard';
 import ModalCart from '@/components/modals/ModalCart';
 
 const Topbar = () => {
-  // Removido o hook useTheme
   const navigate = useNavigate();
   
-  // Estados de controle dos Modais
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false); 
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
   
-  // Estado para a contagem do carrinho
   const [cartCount, setCartCount] = useState(0);
+  const [notiCount, setNotiCount] = useState(0); // Estado para a contagem de notificações ativos
 
-  // Inicialização do userData
   const [userData] = useState(() => {
     const rawName = localStorage.getItem('user_name');
     const rawUser = localStorage.getItem('user');
@@ -42,7 +39,6 @@ const Topbar = () => {
     };
   });
 
-  // Busca a quantidade de itens no carrinho
   const fetchCartCount = async () => {
     try {
       const res = await api.get('/cart');
@@ -73,8 +69,17 @@ const Topbar = () => {
       </div>
 
       <div className="flex items-center gap-1.5 md:gap-3">
-        {/* Centro de Notificações */}
-        <NotificationCenter />
+        
+        {/* Centro de Notificações com Badge Numérica Sincronizada */}
+        <div className="relative">
+          <NotificationCenter onCountChange={setNotiCount} />
+          
+          {notiCount > 0 && (
+            <span className="absolute top-1 right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-black text-white shadow-sm border-2 border-white dark:border-[#0B0B0F] animate-in zoom-in pointer-events-none z-10">
+              {notiCount}
+            </span>
+          )}
+        </div>
 
         {/* Botão do Carrinho de Compras com Badge */}
         <button 
@@ -85,7 +90,7 @@ const Topbar = () => {
           <ShoppingBag size={20} className="group-hover:scale-110 transition-transform" />
           
           {cartCount > 0 && (
-            <span className="absolute top-1 right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand px-1 text-[9px] font-black text-white shadow-sm border-2 border-bg-main animate-in zoom-in">
+            <span className="absolute top-1 right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand px-1 text-[9px] font-black text-white shadow-sm border-2 border-white dark:border-[#0B0B0F] animate-in zoom-in">
               {cartCount}
             </span>
           )}

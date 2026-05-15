@@ -16,15 +16,11 @@ import routeCategory from "./routes/RouteCategory.js";
 import routeGoal from "./routes/RouteGoal.js";
 import routeRecurrence from "./routes/RouteRecurrence.js";
 import routeCard from "./routes/RouteCard.js";
-import ShoppingCart from "./routes/RouteShoppingCart.js";
-// NOVO: Importação das rotas de anúncios inteligentes
-import routeShop from "./shop/ShopRoutes.js"; 
+import ShoppingCart from "./routes/RouteShoppingCart.js"; // Rota consolidada
 
 dotenv.config();
 
 const app = express();
-
-// O Render injeta a variável PORT automaticamente. 
 const PORT = process.env.PORT || 5000;
 
 // --- MIDDLEWARES ---
@@ -39,9 +35,7 @@ app.use('/api/categories', routeCategory);
 app.use('/api/goals', routeGoal);
 app.use('/api/recurrences', routeRecurrence);
 app.use('/api/cards', routeCard);
-app.use('/api/cart', ShoppingCart);
-// NOVO: Registro da rota do módulo shop
-app.use('/api/shop', routeShop); 
+app.use('/api/cart', ShoppingCart); // Centraliza tudo aqui
 
 app.get("/", (req, res) => {
   res.send("Servidor do financeMAX rodando corretamente no Render!");
@@ -49,7 +43,6 @@ app.get("/", (req, res) => {
 
 // --- CONFIGURAÇÃO DOS CRON JOBS ---
 const startCronJobs = () => {
-  // RECORRÊNCIAS: Todo dia à meia-noite
   cron.schedule('0 0 * * *', async () => {
     console.log("[CRON] Iniciando processamento de recorrências diárias...");
     try {
@@ -59,9 +52,7 @@ const startCronJobs = () => {
     }
   });
 
-  // INVESTIMENTOS: A cada 30 minutos
   cron.schedule('*/30 * * * *', async () => {
-    console.log("[CRON] Verificando ativos para atualização de mercado...");
     try {
       const activeInvestments = await ModelInvestment.find({ status: 'em andamento' });
       const tickers = [...new Set(activeInvestments
@@ -73,7 +64,7 @@ const startCronJobs = () => {
         console.log(`[CRON] ${tickers.length} tickers identificados para sync.`);
       }
     } catch (err) {
-      console.error("[CRON] Erro ao buscar investimentos no cron:", err.message);
+      console.error("[CRON] Erro no cron de investimentos:", err.message);
     }
   });
 };
@@ -82,9 +73,8 @@ const startCronJobs = () => {
 const startServer = async () => {
   try {
     const uri = process.env.MONGO_URI;
-    
     if (!uri) {
-      console.error("❌ Erro: Variável MONGO_URI não encontrada no Environment.");
+      console.error("❌ Erro: Variável MONGO_URI não encontrada.");
       process.exit(1); 
     }
 

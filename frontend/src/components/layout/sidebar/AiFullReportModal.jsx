@@ -1,17 +1,22 @@
 import React from 'react';
-import { X, ShieldAlert, ArrowUpRight, CheckCircle2, BrainCircuit } from 'lucide-react';
+import { X, ShieldAlert, ArrowUpRight, CheckCircle2, BrainCircuit, ThumbsUp, ThumbsDown, PieChart } from 'lucide-react';
 
 const AiFullReportModal = ({ isOpen, onClose, reportData }) => {
   if (!isOpen) return null;
 
-  // Garante que o modal não quebre se os dados ainda estiverem carregando e inclui o novo campo 'conselhoCurto'
-  const data = reportData || { conselhoCurto: "", eficienciaRetencao: 0, alertas: [], estrategias: [] };
+  const data = reportData || { 
+    conselhoCurto: "", 
+    eficienciaRetencao: 0, 
+    alertas: [], 
+    estrategias: [],
+    pontosPositivos: [],
+    pontosNegativos: [],
+    maioresGastos: [] // Novo campo injetado
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-      
-      {/* Container Principal integrado ao Design System do projeto */}
-      <div className="bg-white dark:bg-[#0D0D12] border border-gray-100 dark:border-white/5 w-full max-w-[460px] rounded-[28px] overflow-hidden flex flex-col shadow-2xl transition-colors">
+      <div className="bg-white dark:bg-[#0D0D12] border border-gray-100 dark:border-white/5 w-full max-w-[460px] rounded-[28px] overflow-hidden flex flex-col shadow-2xl transition-colors scale-in-95 duration-200">
         
         {/* Header Principal */}
         <div className="p-5 border-b border-gray-50 dark:border-white/5 flex items-center justify-between">
@@ -20,8 +25,8 @@ const AiFullReportModal = ({ isOpen, onClose, reportData }) => {
               <CheckCircle2 size={18} />
             </div>
             <div>
-              <h2 className="text-gray-900 dark:text-white font-bold text-base leading-none">Métricas de Auditoria</h2>
-              <p className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold mt-1">Análise automatizada de ecossistema</p>
+              <h2 className="text-gray-900 dark:text-white font-bold text-base leading-none">Auditoria de Ecossistema</h2>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold mt-1">Análise automatizada de retenção</p>
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 hover:bg-gray-100 dark:hover:bg-white/5 rounded-full text-gray-400 transition-colors">
@@ -29,37 +34,32 @@ const AiFullReportModal = ({ isOpen, onClose, reportData }) => {
           </button>
         </div>
 
-        {/* Corpo do Relatório com Scroll Oculto */}
+        {/* Corpo do Relatório */}
         <div className="p-5 space-y-5 overflow-y-auto max-h-[75vh] scrollbar-none">
           
-          {/* Caixa Editorial (50% Retrospectiva / 50% Plano de Ação) */}
+          {/* Caixa Editorial (Conselho Principal) */}
           {data.conselhoCurto && (
-            <div className="relative p-5 rounded-3xl bg-brand/[0.03] border border-brand/10 overflow-hidden transition-all">
-              {/* Marca d'água sutil integrada ao background */}
+            <div className="relative p-5 rounded-3xl bg-brand/[0.03] border border-brand/10 overflow-hidden">
               <div className="absolute -right-2 -top-2 opacity-[0.03] dark:opacity-[0.05] pointer-events-none">
                 <BrainCircuit size={80} className="text-brand" />
               </div>
-              
               <h3 className="text-[10px] font-black uppercase tracking-widest text-brand mb-2 flex items-center gap-2">
                 <span className="h-1 w-3 bg-brand rounded-full" />
-                Diretriz Geral
+                Diretriz Estratégica
               </h3>
-              
               <p className="text-gray-600 dark:text-gray-300 text-[12.5px] leading-relaxed font-medium italic relative z-10">
                 "{data.conselhoCurto}"
               </p>
             </div>
           )}
           
-          {/* 1. Gráfico de Barra de Retenção */}
+          {/* Eficiência de Retenção */}
           <div className="space-y-2 p-4 bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 rounded-2xl">
             <div className="flex justify-between items-center text-[11px] font-bold uppercase tracking-tight text-gray-500">
               <span>Eficiência de Retenção</span>
               <span className="text-brand">{data.eficienciaRetencao}%</span>
             </div>
-            {/* Trilho da barra */}
             <div className="w-full h-2.5 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
-              {/* Preenchimento dinâmico */}
               <div 
                 className="h-full bg-brand rounded-full transition-all duration-500 shadow-sm"
                 style={{ width: `${data.eficienciaRetencao}%` }}
@@ -67,7 +67,51 @@ const AiFullReportModal = ({ isOpen, onClose, reportData }) => {
             </div>
           </div>
 
-          {/* 2. Lista de Alertas Estilizados */}
+          {/* NOVA SEÇÃO: Análise de Ofensores (Maiores Gastos por Categoria) */}
+          {data.maioresGastos && data.maioresGastos.length > 0 && (
+            <div className="space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 dark:text-gray-500 block px-1 flex items-center gap-1.5">
+                <PieChart size={12} /> Ofensores de Caixa
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                {data.maioresGastos.map((gasto, idx) => (
+                  <div key={idx} className="p-3 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 flex flex-col justify-center">
+                    <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-tight truncate">{gasto.categoria}</span>
+                    <span className="text-[13px] font-bold text-gray-700 dark:text-gray-300 mt-0.5">{gasto.valor}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Pontos Positivos & Negativos */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Prós */}
+            <div className="p-3.5 rounded-2xl bg-emerald-500/[0.03] border border-emerald-500/10 space-y-2">
+              <span className="text-[9px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                <ThumbsUp size={12} /> Pontos Fortes
+              </span>
+              <div className="space-y-1.5">
+                {data.pontosPositivos?.map((item, i) => (
+                  <p key={i} className="text-[11px] text-gray-600 dark:text-gray-400 leading-snug font-medium">• {item}</p>
+                )) || <p className="text-[10px] text-gray-400 italic">Analisando histórico...</p>}
+              </div>
+            </div>
+
+            {/* Contras */}
+            <div className="p-3.5 rounded-2xl bg-rose-500/[0.03] border border-rose-500/10 space-y-2">
+              <span className="text-[9px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                <ThumbsDown size={12} /> Vulnerabilidades
+              </span>
+              <div className="space-y-1.5">
+                {data.pontosNegativos?.map((item, i) => (
+                  <p key={i} className="text-[11px] text-gray-600 dark:text-gray-400 leading-snug font-medium">• {item}</p>
+                )) || <p className="text-[10px] text-gray-400 italic">Analisando histórico...</p>}
+              </div>
+            </div>
+          </div>
+
+          {/* Alertas */}
           {data.alertas && data.alertas.length > 0 && (
             <div className="space-y-2">
               <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 dark:text-gray-500 block px-1">
@@ -84,7 +128,7 @@ const AiFullReportModal = ({ isOpen, onClose, reportData }) => {
             </div>
           )}
 
-          {/* 3. Estratégias de Impacto Cadastradas */}
+          {/* Plano de Otimização */}
           {data.estrategias && data.estrategias.length > 0 && (
             <div className="space-y-2">
               <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 dark:text-gray-500 block px-1">
@@ -97,7 +141,6 @@ const AiFullReportModal = ({ isOpen, onClose, reportData }) => {
                       <div className="h-1.5 w-1.5 rounded-full bg-brand" />
                       <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-300">{est.acao}</p>
                     </div>
-                    {/* Badge de Impacto Financeiro */}
                     <div className="flex items-center gap-0.5 px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-[10px]">
                       <ArrowUpRight size={10} />
                       <span>+{est.impacto}%</span>

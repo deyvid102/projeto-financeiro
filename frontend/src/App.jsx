@@ -9,6 +9,7 @@ import TransactionsPanel from './components/pages/panel/TransactionsPanel';
 import ExpensesPanel from './components/pages/panel/ExpensesPanel';
 import InvestmentPanel from './components/pages/panel/InvestmentPanel';
 import DashGoal from './components/pages/panel/DashGoal'; 
+import StrategyPanel from './components/pages/panel/strategy/StrategyPanel';
 
 // Layout & Context
 import MainLayout from './components/layout/MainLayout';
@@ -57,6 +58,12 @@ function App() {
           <Route path="/goals" element={
             <PrivateRoute>
               <MainLayout><DashGoal /></MainLayout>
+            </PrivateRoute>
+          } />
+
+          <Route path="/strategy" element={
+            <PrivateRoute>
+              <MainLayout><StrategyPanel /></MainLayout>
             </PrivateRoute>
           } />
 

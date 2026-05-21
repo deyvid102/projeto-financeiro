@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, ReceiptText, TrendingUp, WalletMinimal, Target } from 'lucide-react';
+import { LayoutDashboard, ReceiptText, TrendingUp, WalletMinimal, Target, Compass } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 // Importação da logo
 import logoImg from '../../../assets/logo.png'; 
@@ -11,6 +11,7 @@ const Sidebar = () => {
     { icon: WalletMinimal, label: 'Despesas', path: '/expenses' },
     { icon: TrendingUp, label: 'Investimentos', path: '/investments' },
     { icon: Target, label: 'Caixinhas', path: '/goals' },
+    { icon: Compass, label: 'Estratégia', path: '/strategy' },
   ];
 
   return (

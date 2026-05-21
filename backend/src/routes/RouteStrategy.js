@@ -12,7 +12,7 @@ import {
   updateChildCard,
   removeChildCard
 } from '../controllers/ControlStrategy.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { protect } from '../middleware/AuthMiddleware.js';
 
 const router = express.Router();
 

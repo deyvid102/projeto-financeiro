@@ -1,5 +1,6 @@
 import React, { forwardRef } from 'react';
 import { Plus, Sliders, Trash, Link2, Unlink, Component, Trash2, GripHorizontal, Edit2, MousePointerClick } from 'lucide-react';
+import CardChildFunction from '@/components/CardChildFunction';
 
 const StrategyBoard = forwardRef(({
   isDarkMode,
@@ -155,7 +156,9 @@ const StrategyBoard = forwardRef(({
       {/* Cards Loop */}
       {cards.map((card) => {
         const cardWidth = getCardWidth(card.size);
-        const cardHeight = getCardHeight(card);
+        const baseHeight = getCardHeight(card);
+        const childItemsHeight = (card.childCards?.length || 0) * 60;
+        const cardHeight = Math.max(baseHeight, 150 + childItemsHeight);
         const isTargetAwaiting = linkingSource && String(linkingSource._id) !== String(card._id);
 
         return (
@@ -192,20 +195,27 @@ const StrategyBoard = forwardRef(({
             <div className="p-3 flex flex-col gap-2 no-drag overflow-hidden flex-1 justify-between">
               <div className="flex flex-col gap-2 overflow-y-auto">
                 {card.childCards?.map((child) => (
-                  <div key={child._id} className="bg-gray-100/50 dark:bg-gray-800/50 p-2.5 rounded-lg border border-gray-200/50 dark:border-gray-700/50 flex justify-between items-start group">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex gap-1 mb-1">
-                        {Array.isArray(child.category) 
-                          ? child.category.map(cat => <span key={cat._id} className="text-[8px] px-1.5 py-0.5 rounded font-black uppercase" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>{cat.name}</span>)
-                          : child.category && <span className="text-[8px] px-1.5 py-0.5 rounded font-black uppercase" style={{ backgroundColor: `${child.category.color}20`, color: child.category.color }}>{child.category.name}</span>
-                        }
+                  <div key={child._id} className="flex flex-col gap-2">
+                    <div className="bg-gray-100/50 dark:bg-gray-800/50 p-2.5 rounded-lg border border-gray-200/50 dark:border-gray-700/50 flex justify-between items-start group">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex gap-1 mb-1">
+                          {Array.isArray(child.category)
+                            ? child.category.map(cat => <span key={cat._id} className="text-[8px] px-1.5 py-0.5 rounded font-black uppercase" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>{cat.name}</span>)
+                            : child.category && <span className="text-[8px] px-1.5 py-0.5 rounded font-black uppercase" style={{ backgroundColor: `${child.category.color}20`, color: child.category.color }}>{child.category.name}</span>
+                          }
+                        </div>
+                        <div className="text-xs font-bold truncate">{child.name}</div>
                       </div>
-                      <div className="text-xs font-bold truncate">{child.name}</div>
+                      {isEditMode && (
+                        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                          <button onClick={(e) => { e.stopPropagation(); setActiveParentId(card._id); setEditingChild(child); setIsFilhoModalOpen(true); }} className="text-blue-500 p-1 hover:bg-blue-500/10 rounded"><Edit2 size={12} /></button>
+                          <button onClick={(e) => { e.stopPropagation(); handleOpenDelete(child._id, 'child', card._id); }} className="text-red-500 p-1 hover:bg-red-500/10 rounded"><Trash2 size={12} /></button>
+                        </div>
+                      )}
                     </div>
-                    {isEditMode && (
-                      <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity ml-2">
-                        <button onClick={(e) => { e.stopPropagation(); setActiveParentId(card._id); setEditingChild(child); setIsFilhoModalOpen(true); }} className="text-blue-500 p-1 hover:bg-blue-500/10 rounded"><Edit2 size={12} /></button>
-                        <button onClick={(e) => { e.stopPropagation(); handleOpenDelete(child._id, 'child', card._id); }} className="text-red-500 p-1 hover:bg-red-500/10 rounded"><Trash2 size={12} /></button>
+                    {child.linkedFunction && (
+                      <div className="scale-90 origin-top-left">
+                        <CardChildFunction linkedFunction={child.linkedFunction} />
                       </div>
                     )}
                   </div>

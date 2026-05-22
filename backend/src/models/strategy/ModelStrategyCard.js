@@ -15,6 +15,18 @@ const childCardSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'StrategyCategory',
     }],
+    // ── Função Vinculada (Goal, Investment, Recurrence, ShoppingCart, Card) ──
+    linkedFunction: {
+      type: {
+        type: String,
+        enum: ['goal', 'investment', 'recurrence', 'shoppingcart', 'card'],
+        default: null,
+      },
+      referenceId: {
+        type: mongoose.Schema.Types.ObjectId,
+        default: null,
+      },
+    },
   },
   { timestamps: true }
 );

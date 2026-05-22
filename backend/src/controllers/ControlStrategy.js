@@ -1,5 +1,58 @@
 import StrategyCard from '../models/strategy/ModelStrategyCard.js';
 import StrategyCategory from '../models/strategy/ModelStrategyCategory.js';
+import ModelGoal from '../models/ModelGoal.js';
+import ModelInvestment from '../models/ModelInvestment.js';
+import ModelRecurrence from '../models/ModelRecurrence.js';
+import ModelShoppingCart from '../models/ModelShoppingCart.js';
+import ModelCard from '../models/ModelCard.js';
+
+// ── Função auxiliar para popular linkedFunction baseado no tipo ──
+const populateLinkedFunction = async (childCard) => {
+  if (!childCard.linkedFunction || !childCard.linkedFunction.referenceId) {
+    return childCard;
+  }
+
+  try {
+    let linkedData;
+    switch (childCard.linkedFunction.type) {
+      case 'goal':
+        linkedData = await ModelGoal.findById(childCard.linkedFunction.referenceId);
+        break;
+      case 'investment':
+        linkedData = await ModelInvestment.findById(childCard.linkedFunction.referenceId);
+        break;
+      case 'recurrence':
+        linkedData = await ModelRecurrence.findById(childCard.linkedFunction.referenceId);
+        break;
+      case 'shoppingcart':
+        linkedData = await ModelShoppingCart.findById(childCard.linkedFunction.referenceId);
+        break;
+      case 'card':
+        linkedData = await ModelCard.findById(childCard.linkedFunction.referenceId);
+        break;
+      default:
+        linkedData = null;
+    }
+    
+    if (linkedData) {
+      childCard.linkedFunction.item = linkedData;
+    }
+  } catch (err) {
+    console.error(`Erro ao popular linkedFunction: ${err.message}`);
+  }
+
+  return childCard;
+};
+
+// ── Função para popular todos os linkedFunctions de um card ──
+const populateAllLinkedFunctions = async (card) => {
+  if (card.childCards && Array.isArray(card.childCards)) {
+    card.childCards = await Promise.all(
+      card.childCards.map(child => populateLinkedFunction(child))
+    );
+  }
+  return card;
+};
 
 export const createStrategyCategory = async (req, res) => {
   try {
@@ -58,9 +111,15 @@ export const createStrategyCard = async (req, res) => {
 
 export const getStrategyCards = async (req, res) => {
   try {
-    const cards = await StrategyCard.find({ user: req.user._id })
+    let cards = await StrategyCard.find({ user: req.user._id })
       .populate('connectedTo.targetId', 'title')
       .populate('childCards.category');
+    
+    // Popular linkedFunctions para todos os cards
+    cards = await Promise.all(
+      cards.map(card => populateAllLinkedFunctions(card))
+    );
+    
     res.status(200).json(cards);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -69,7 +128,7 @@ export const getStrategyCards = async (req, res) => {
 
 export const updateStrategyCard = async (req, res) => {
   try {
-    const card = await StrategyCard.findOneAndUpdate(
+    let card = await StrategyCard.findOneAndUpdate(
       { _id: req.params.id, user: req.user._id },
       req.body,
       { new: true, runValidators: true }
@@ -78,6 +137,10 @@ export const updateStrategyCard = async (req, res) => {
     .populate('childCards.category');
 
     if (!card) return res.status(404).json({ message: 'Card estratégico não encontrado.' });
+    
+    // Popular linkedFunctions
+    card = await populateAllLinkedFunctions(card);
+    
     res.status(200).json(card);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -96,16 +159,20 @@ export const deleteStrategyCard = async (req, res) => {
 
 export const addChildCard = async (req, res) => {
   try {
-    const { name, description, category } = req.body;
+    const { name, description, category, linkedFunction } = req.body;
     const card = await StrategyCard.findOne({ _id: req.params.parentId, user: req.user._id });
 
     if (!card) return res.status(404).json({ message: 'Card pai não encontrado.' });
 
-    card.childCards.push({ name, description, category });
+    card.childCards.push({ name, description, category, linkedFunction });
     await card.save();
 
     await card.populate('connectedTo.targetId', 'title');
     await card.populate('childCards.category');
+    
+    // Popular linkedFunctions
+    await populateAllLinkedFunctions(card);
+    
     res.status(201).json(card);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -114,7 +181,7 @@ export const addChildCard = async (req, res) => {
 
 export const updateChildCard = async (req, res) => {
   try {
-    const { name, description, category } = req.body;
+    const { name, description, category, linkedFunction } = req.body;
     const card = await StrategyCard.findOne({ _id: req.params.parentId, user: req.user._id });
 
     if (!card) return res.status(404).json({ message: 'Card pai não encontrado.' });
@@ -125,10 +192,15 @@ export const updateChildCard = async (req, res) => {
     child.name = name;
     child.description = description;
     child.category = category;
+    child.linkedFunction = linkedFunction;
 
     await card.save();
     await card.populate('connectedTo.targetId', 'title');
     await card.populate('childCards.category');
+    
+    // Popular linkedFunctions
+    await populateAllLinkedFunctions(card);
+    
     res.status(200).json(card);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -145,6 +217,10 @@ export const removeChildCard = async (req, res) => {
 
     await card.populate('connectedTo.targetId', 'title');
     await card.populate('childCards.category');
+    
+    // Popular linkedFunctions
+    await populateAllLinkedFunctions(card);
+    
     res.status(200).json(card);
   } catch (error) {
     res.status(500).json({ message: error.message });

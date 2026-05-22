@@ -61,7 +61,7 @@ const StrategyPanel = () => {
   }, []);
 
   const lineTypes = [
-    { value: 'line',       label: 'Sólida',   color: isDarkMode ? '#9ca3af' : '#6b7280' },
+    { value: 'line',        label: 'Sólida',   color: isDarkMode ? '#9ca3af' : '#6b7280' },
     { value: 'dotted-line', label: 'Tracejada',  color: isDarkMode ? '#9ca3af' : '#6b7280' },
     { value: 'red-line',    label: 'Vermelha',    color: '#ef4444' },
     { value: 'green-line',  label: 'Verde',      color: '#22c55e' },
@@ -102,23 +102,29 @@ const StrategyPanel = () => {
     if (!boardRef.current) return;
     const boardRect = boardRef.current.getBoundingClientRect();
     
-    // Se não houver coordenadas explícitas, usa o contexto
     const x = xParam !== null ? xParam : (boardContextMenu.x - boardRect.left) + boardRef.current.scrollLeft;
     const y = yParam !== null ? yParam : (boardContextMenu.y - boardRect.top) + boardRef.current.scrollTop;
 
     try {
+      if (!api || typeof api.post !== 'function') {
+        throw new Error("A instância do Axios (api) não está configurada ou importada corretamente.");
+      }
       await api.post('/strategy/cards', { title: 'Novo Card', position: { x, y }, size: 'medium' });
       closeAllMenus();
       fetchData();
     } catch (error) {
-      alert("Erro ao criar card.");
+      console.error("Erro detalhado ao criar card:", error);
+      if (error.response) {
+        console.error("Dados da resposta do erro:", error.response.data);
+      }
+      alert("Erro ao criar card. Verifique a conexão com o servidor ou se você está autenticado.");
     }
   };
 
   const closeAllMenus = () => {
-    setBoardContextMenu({ ...boardContextMenu, visible: false });
-    setLineContextMenu({ ...lineContextMenu, visible: false });
-    setCardContextMenu({ ...cardContextMenu, visible: false });
+    setBoardContextMenu(prev => ({ ...prev, visible: false }));
+    setLineContextMenu(prev => ({ ...prev, visible: false }));
+    setCardContextMenu(prev => ({ ...prev, visible: false }));
   };
 
   const handleStartLinking = (e, card) => {
@@ -167,7 +173,9 @@ const StrategyPanel = () => {
     try { 
       await api.put(`/strategy/cards/${sourceCardId}`, { connectedTo: updatedConnections }); 
       fetchData(); 
-    } catch (error) {}
+    } catch (error) {
+      console.error(error);
+    }
     closeAllMenus();
   };
 
@@ -180,7 +188,9 @@ const StrategyPanel = () => {
     try { 
       await api.put(`/strategy/cards/${sourceCardId}`, { connectedTo: updatedConnections }); 
       fetchData(); 
-    } catch (error) {}
+    } catch (error) {
+      console.error(error);
+    }
     closeAllMenus();
   };
 
@@ -238,7 +248,13 @@ const StrategyPanel = () => {
 
   const handleStartEdit = (card) => { setEditingCardId(card._id); setEditTitle(card.title); };
   const handleSaveTitle = async (cardId) => {
-    try { await api.put(`/strategy/cards/${cardId}`, { title: editTitle }); setEditingCardId(null); fetchData(); } catch (error) {}
+    try { 
+      await api.put(`/strategy/cards/${cardId}`, { title: editTitle }); 
+      setEditingCardId(null); 
+      fetchData(); 
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const handleMouseDown = (e, card) => {
@@ -387,7 +403,7 @@ const StrategyPanel = () => {
         
         {isEditMode && boardContextMenu.visible && (
           <div className="fixed z-50 p-2 rounded-lg shadow-xl border w-40" style={{ top: boardContextMenu.y, left: boardContextMenu.x, backgroundColor: isDarkMode ? '#1f2937' : '#ffffff', borderColor: isDarkMode ? '#374151' : '#e5e7eb' }}>
-            <button onClick={handleCreateAtPosition} className="flex items-center gap-2 w-full p-2 hover:bg-brand/10 rounded transition-colors text-xs font-bold uppercase">
+            <button onClick={() => handleCreateAtPosition()} className="flex items-center gap-2 w-full p-2 hover:bg-brand/10 rounded transition-colors text-xs font-bold uppercase">
               <Plus size={14} /> Novo Card
             </button>
           </div>

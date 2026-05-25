@@ -259,6 +259,7 @@ const ModalTransactions = ({ isOpen, onClose, onTransactionAdded, transactionToE
               <div className="relative">
                 <span className={`absolute left-4 top-1/2 -translate-y-1/2 font-black text-xl italic ${themeText}`}>R$</span>
                 <input
+                min="0.01"
                   type="number" step="0.01" placeholder="0,00"
                   className={`w-full pl-12 pr-4 py-3.5 bg-bg-main border border-border-ui rounded-xl text-text-primary font-black text-2xl outline-none transition-all shadow-inner ${themeBorder}`}
                   value={formData.amount} 

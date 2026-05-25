@@ -101,6 +101,11 @@ const StrategyBoard = forwardRef(({
     };
   };
 
+  // Cálculo do máximo de filhos para escala de destaque proporcional
+  const maxChildrenFound = cards.length > 0 
+    ? Math.max(...cards.map(c => c.childCards?.length || 0)) 
+    : 0;
+
   return (
     <div
       ref={ref}
@@ -255,11 +260,21 @@ const StrategyBoard = forwardRef(({
       )}
 
       {/* Cards Loop */}
-      {cards.map((card) => {
+      {[...cards]
+        .sort((a, b) => (a.childCards?.length || 0) - (b.childCards?.length || 0))
+        .map((card) => {
         const cardWidth = getCardWidth(card.size);
         const baseHeight = getCardHeight(card);
         const childItemsHeight = (card.childCards?.length || 0) * 60;
         const cardHeight = Math.max(baseHeight, 150 + childItemsHeight);
+
+        const childCount = card.childCards?.length || 0;
+        // Destaque dinâmico: se tiver filhos e for um dos mais "populados" do quadro (top 30% da escala)
+        const isHighDensity = maxChildrenFound > 0 && childCount >= (maxChildrenFound * 0.7) && childCount > 1;
+        
+        // Intensidade do brilho baseada no count
+        const glowIntensity = childCount > 0 ? Math.min(childCount * 4, 20) : 0;
+
         const isTargetAwaiting = linkingSource && String(linkingSource._id) !== String(card._id);
 
         return (
@@ -275,8 +290,13 @@ const StrategyBoard = forwardRef(({
               minWidth: '240px',
               height: `${cardHeight}px`, 
               backgroundColor: isDarkMode ? '#1f2937' : '#ffffff',
-              borderColor: isDarkMode ? '#374151' : '#e5e7eb',
-              willChange: 'left, top'
+              borderColor: isHighDensity ? 'var(--brand)' : (isDarkMode ? '#374151' : '#e5e7eb'),
+              borderWidth: isHighDensity ? '2px' : '1px',
+              boxShadow: isHighDensity 
+                ? `0 0 ${glowIntensity}px ${isDarkMode ? 'rgba(0,209,255,0.3)' : 'rgba(0,209,255,0.15)'}, 0 20px 25px -5px rgba(0, 0, 0, 0.2)`
+                : '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+              willChange: 'left, top',
+              zIndex: 10 + childCount
             }}
           >
             <div className="flex items-center justify-between p-3 border-b rounded-t-2xl shrink-0 h-[54px]" 

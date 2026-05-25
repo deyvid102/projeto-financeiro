@@ -61,15 +61,22 @@ const callModel = async (messages, options = {}) => {
     const key = getCurrentKey();
     const client = new Groq({ apiKey: key });
     try {
-      console.log(`[GROQ] Trying key index ${currentKeyIndex}`);
-      const completion = await client.chat.completions.create({ messages, ...options });
+      console.log(`[GROQ] Tentando chave índice ${currentKeyIndex} (Tentativa ${attempt + 1}/${apiKeys.length})`);
+      // Adicionado timeout para evitar que a requisição fique pendente infinitamente
+      const completion = await client.chat.completions.create(
+        { messages, ...options },
+        { timeout: 20000 } 
+      );
       return completion;
     } catch (err) {
       lastErr = err;
+      const status = err?.status || err?.response?.status;
       const retryAfter = extractRetryAfter(err);
-      console.warn(`[GROQ] Key index ${currentKeyIndex} failed:`, err?.message || err, 'retryAfter', retryAfter);
+      console.warn(`[GROQ] Chave ${currentKeyIndex} falhou (Status: ${status}):`, err?.message || 'Erro de rede ou timeout');
+
       // rotate to next key and try again on rate-limit
-      if (err?.status === 429 || err?.error?.error?.code === 'rate_limit_exceeded') {
+      if (status === 429 || status === 503 || err?.error?.error?.code === 'rate_limit_exceeded' || err?.name === 'APITimeoutError') {
+        console.log(`[GROQ] Limite atingido ou timeout na chave ${currentKeyIndex}. Rotacionando...`);
         rotateKey();
         continue;
       }
@@ -238,8 +245,9 @@ export const getFinancialAiReport = async (req, res) => {
       return res.json({ insight: aiData });
     } catch (err) {
       console.error('[AI REPORT] Error calling model:', err);
+      const status = err?.status || err?.response?.status;
       const retryAfter = extractRetryAfter(err);
-      if (err?.status === 429 || err?.error?.error?.code === 'rate_limit_exceeded') {
+      if (status === 429 || status === 503 || err?.error?.error?.code === 'rate_limit_exceeded') {
         console.warn('[AI REPORT] Rate limit detected — returning local fallback. Retry-After:', retryAfter);
         const fallback = createFallbackReport(summary);
         return res.status(200).json({ insight: fallback, fallback: true, note: 'Service rate-limited, returned local fallback.', retryAfterSeconds: retryAfter });
@@ -307,8 +315,9 @@ export const askFinancialAi = async (req, res) => {
       return res.json({ answer });
     } catch (err) {
       console.error('[CHAT IA] Error calling model:', err);
+      const status = err?.status || err?.response?.status;
       const retryAfterChat = extractRetryAfter(err);
-      if (err?.status === 429 || err?.error?.error?.code === 'rate_limit_exceeded') {
+      if (status === 429 || status === 503 || err?.error?.error?.code === 'rate_limit_exceeded') {
         console.warn('[CHAT IA] Rate limit detected — returning fallback answer. Retry-After:', retryAfterChat);
         const topCat = Object.entries(summary.detalhes.gastosPorCategoria || {}).sort((a,b) => b[1]-a[1])[0];
         const topCatText = topCat ? `${topCat[0]} (R$ ${Number(topCat[1]).toFixed(2)})` : 'nenhuma categoria relevante';
@@ -401,7 +410,8 @@ export const analyzeStrategyStructure = async (req, res) => {
       return res.json({ insight: aiData });
     } catch (err) {
       console.error('[AI AUDIT] Error calling model:', err);
-      if (err?.status === 429 || err?.error?.error?.code === 'rate_limit_exceeded') {
+      const status = err?.status || err?.response?.status;
+      if (status === 429 || status === 503 || err?.error?.error?.code === 'rate_limit_exceeded') {
         const retryAfterAudit = extractRetryAfter(err);
         console.warn('[AI AUDIT] Rate limit detected — returning structural fallback. Retry-After:', retryAfterAudit);
 

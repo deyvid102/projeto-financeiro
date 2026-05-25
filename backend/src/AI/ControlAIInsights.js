@@ -8,7 +8,78 @@ import Investment from "../models/ModelInvestment.js";
 
 dotenv.config();
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Load GROQ API keys from env and prepare rotation
+const apiKeys = [
+  process.env.GROQ_API_KEY,
+  process.env.GROQ_API_KEY2,
+  process.env.GROQ_API_KEY3,
+  process.env.GROQ_API_KEY4,
+  process.env.GROQ_API_KEY5
+].filter(Boolean);
+
+let currentKeyIndex = 0;
+
+const rotateKey = () => {
+  if (!apiKeys.length) return null;
+  currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
+  return apiKeys[currentKeyIndex];
+};
+
+const getCurrentKey = () => apiKeys[currentKeyIndex] || null;
+
+const extractRetryAfter = (err) => {
+  try {
+    const hdrs = err?.headers || err?.response?.headers || null;
+    if (!hdrs) return null;
+    const raw = typeof hdrs.get === 'function' ? hdrs.get('retry-after') : (hdrs['retry-after'] || hdrs['Retry-After'] || hdrs['retry_after']);
+    const n = raw ? parseInt(String(raw), 10) : null;
+    return Number.isFinite(n) ? n : null;
+  } catch (e) {
+    return null;
+  }
+};
+
+const REQUEST_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes per user
+const lastRequestByUser = new Map();
+
+const checkAndSetUserThrottle = (userId) => {
+  const now = Date.now();
+  const last = lastRequestByUser.get(userId) || 0;
+  const diff = now - last;
+  if (diff < REQUEST_INTERVAL_MS) {
+    return Math.ceil((REQUEST_INTERVAL_MS - diff) / 1000);
+  }
+  lastRequestByUser.set(userId, now);
+  return 0;
+};
+
+const callModel = async (messages, options = {}) => {
+  if (!apiKeys.length) throw new Error('No GROQ API keys configured');
+  let lastErr = null;
+  // try each key until success
+  for (let attempt = 0; attempt < apiKeys.length; attempt++) {
+    const key = getCurrentKey();
+    const client = new Groq({ apiKey: key });
+    try {
+      console.log(`[GROQ] Trying key index ${currentKeyIndex}`);
+      const completion = await client.chat.completions.create({ messages, ...options });
+      return completion;
+    } catch (err) {
+      lastErr = err;
+      const retryAfter = extractRetryAfter(err);
+      console.warn(`[GROQ] Key index ${currentKeyIndex} failed:`, err?.message || err, 'retryAfter', retryAfter);
+      // rotate to next key and try again on rate-limit
+      if (err?.status === 429 || err?.error?.error?.code === 'rate_limit_exceeded') {
+        rotateKey();
+        continue;
+      }
+      // other errors: rethrow
+      throw err;
+    }
+  }
+  // if all keys failed, throw last error
+  throw lastErr;
+};
 
 const gatherUserData = async (userId) => {
   console.log("\n=================== INICIANDO VARREDURA DA CONTA ===================");
@@ -112,148 +183,170 @@ const gatherUserData = async (userId) => {
 export const getFinancialAiReport = async (req, res) => {
   try {
     const userId = req.user.id;
+
+    // 1. Aplica o Throttle de 2 minutos por usuário
+    const waitSeconds = checkAndSetUserThrottle(userId);
+    if (waitSeconds > 0) {
+      return res.status(429).json({ 
+        error: `Limite de requisições excedido. Tente novamente em ${waitSeconds} segundos.` 
+      });
+    }
+
     const summary = await gatherUserData(userId);
 
-    const completion = await groq.chat.completions.create({
-      messages: [
+    const messages = [
+      { 
+        role: 'system', 
+        content: `Você é o Auditor Financeiro do FinanceMax. Analise os dados e retorne um relatório JSON estrito com esta estrutura:
         {
-          role: "system",
-          content: `Você é o Auditor Financeiro Avançado integrado ao sistema FinanceMax.
-          Sua missão é gerar uma análise criteriosa e estrita obrigatoriamente no formato JSON fornecido.
-          
-          DIRETRIZ DE EQUILÍBRIO DO CONSELHO (50% Retrospectiva / 50% Plano de Ação):
-          O campo "conselhoCurto" deve resumir com precisão técnica in até 5 linhas:
-          - Linhas 1 e 2: Diagnóstico claro sobre a relação entre as Receitas Consolidadas e os Gastos Totais baseando-se no volume de transações.
-          - Linha 3: O ponto de virada ou maior vulnerabilidade identificada.
-          - Linhas 4 e 5: Uma recomendação prática imediata de otimização.
+          "conselhoCurto": "texto curto e impactante",
+          "eficienciaRetencao": número de 0 a 100,
+          "alertas": ["string"],
+          "pontosPositivos": ["string"],
+          "pontosNegativos": ["string"],
+          "maioresGastos": [{"categoria": "string", "valor": "string formatada"}],
+          "estrategias": [{"acao": "string", "impacto": número}]
+        }`
+      },
+      { 
+        role: 'user', 
+        content: `DADOS DO USUÁRIO:
+        - Transações: ${summary.volumeTransacoes}
+        - Receitas: R$ ${summary.balanco.receitas}
+        - Gastos: R$ ${summary.balanco.gastosTotal}
+        - Saldo Livre: R$ ${summary.balanco.saldoLivre}
+        - Taxa Poupança: ${summary.taxaPoupanca}
+        - Investimentos: R$ ${summary.balanco.totalInvestido}
+        - Custos Fixos: R$ ${summary.balanco.custosFixos}
+        - Gastos por Categoria: ${JSON.stringify(summary.detalhes.gastosPorCategoria)}
+        - Metas: ${JSON.stringify(summary.metas)}`
+      }
+    ];
 
-          Formato de retorno JSON obrigatório:
-          {
-            "conselhoCurto": "Texto analítico contendo o balanço entre histórico recente e plano de ação futuro.",
-            "eficienciaRetencao": 70,
-            "alertas": ["Alerta analítico curto de risco/gargalo"],
-            "pontosPositivos": ["Elogio técnico baseado na capacidade de retenção ou investimentos"],
-            "pontosNegativos": ["Vulnerabilidade identificada no fluxo de caixa"],
-            "maioresGastos": [
-               { "categoria": "Nome da Categoria que mais gastou", "valor": "R$ 0,00" }
-            ],
-            "estrategias": [{ "acao": "Estratégia objetiva de correção", "impacto": 15 }]
-          }`
-        },
-        {
-          role: "user",
-          content: `CONTEXTO EM TEMPO REAL DA CONTA DO USUÁRIO:
-          - Volume Histórico: ${summary.volumeTransacoes} transações registradas.
-          - Receitas Consolidadas: R$ ${summary.balanco.receitas}
-          - Gastos Totais: R$ ${summary.balanco.gastosTotal}
-          - Saldo Líquido Livre: R$ ${summary.balanco.saldoLivre}
-          - Custos Fixos Mensais (Recorrências): R$ ${summary.balanco.custosFixos}
-          - Alocação em Investimentos: R$ ${summary.balanco.totalInvestido}
-          - Taxa de Poupança: ${summary.balanco.taxaPoupanca}
-          - Caixinhas/Metas Ativas: ${summary.metas.map(m => `${m.nome} (${m.progresso}% concluído)`).join(", ") || "Nenhuma."}
-          - Itens Pendentes na Wishlist: ${summary.wishlistCount} desejos.`
-        }
-      ],
-      model: "llama-3.3-70b-versatile",
-      response_format: { type: "json_object" },
-      temperature: 0.15,
-    });
+    try {
+      // 2. Utiliza callModel que rotaciona chaves automaticamente
+      const completion = await callModel(messages, { 
+        model: 'llama-3.3-70b-versatile', 
+        response_format: { type: 'json_object' }, 
+        temperature: 0.15 
+      });
 
-    const aiData = JSON.parse(completion.choices[0]?.message?.content || "{}");
-    res.json({ insight: aiData });
+      console.log('[AI REPORT] Completion raw response:', JSON.stringify(completion, null, 2));
+      const aiText = completion.choices?.[0]?.message?.content || '{}';
+      console.log('[AI REPORT] Raw message content:', aiText);
+      const aiData = JSON.parse(aiText || '{}');
+      return res.json({ insight: aiData });
+    } catch (err) {
+      console.error('[AI REPORT] Error calling model:', err);
+      const retryAfter = extractRetryAfter(err);
+      if (err?.status === 429 || err?.error?.error?.code === 'rate_limit_exceeded') {
+        console.warn('[AI REPORT] Rate limit detected — returning local fallback. Retry-After:', retryAfter);
+        const fallback = createFallbackReport(summary);
+        return res.status(200).json({ insight: fallback, fallback: true, note: 'Service rate-limited, returned local fallback.', retryAfterSeconds: retryAfter });
+      }
+      throw err;
+    }
 
   } catch (error) {
-    console.error("Erro no Relatório IA:", error);
-    res.status(500).json({ error: "Erro interno ao gerar inteligência financeira." });
+    console.error('Erro no Relatório IA:', error);
+    res.status(500).json({ error: 'Erro interno ao gerar inteligência financeira.' });
   }
 };
 
 // POST /api/ai/ask
 export const askFinancialAi = async (req, res) => {
   const dataAtual = new Date().toLocaleDateString('pt-BR');
-  
+
   try {
     const userId = req.user.id;
     const { question } = req.body;
 
+    // Throttle de 2 minutos
+    const waitSeconds = checkAndSetUserThrottle(userId);
+    if (waitSeconds > 0) {
+      return res.status(429).json({ 
+        error: `Por favor, aguarde ${waitSeconds} segundos para enviar outra pergunta.` 
+      });
+    }
+
     console.log(`[CHAT IA] Nova pergunta recebida: "${question}"`);
 
     if (!question || !question.trim()) {
-      return res.status(400).json({ error: "A pergunta financeira não pode estar vazia." });
+      return res.status(400).json({ error: 'A pergunta financeira não pode estar vazia.' });
     }
 
     const summary = await gatherUserData(userId);
 
-    // Converte os mapas de categorias em strings fáceis da IA ler no prompt
-    const stringGastosCat = Object.entries(summary.detalhes.gastosPorCategoria)
+    const stringGastosCat = Object.entries(summary.detalhes.gastosPorCategoria || {})
       .map(([cat, val]) => `- ${cat}: R$ ${val.toFixed(2)}`)
-      .join("\n") || "Nenhum gasto categorizado.";
+      .join('\n') || 'Nenhum gasto categorizado.';
 
-    const stringEntradasCat = Object.entries(summary.detalhes.entradasPorCategoria)
+    const stringEntradasCat = Object.entries(summary.detalhes.entradasPorCategoria || {})
       .map(([cat, val]) => `- ${cat}: R$ ${val.toFixed(2)}`)
-      .join("\n") || "Nenhuma entrada categorizada.";
+      .join('\n') || 'Nenhuma entrada categorizada.';
 
-    const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: `Você é o Mentor Financeiro Exclusivo do ecossistema FinanceMax.
-          O usuário está conversando diretamente com você dentro do painel dele. 
-          Use os dados detalhados e globais injetados no prompt para responder de forma ultra-personalizada e exata.
-          
-          DIRETRIZES FUNDAMENTAIS DE COMPORTAMENTO:
-          - A data de hoje é: ${dataAtual}. Use esta data como referência absoluta para responder perguntas temporais (ex: "hoje", "ontem", "este mês", "mês passado", ou meses específicos como "janeiro").
-          - O usuário pode perguntar sobre gastos específicos em categorias, produtos da lista de desejos ou investimentos. Use o mapeamento detalhado e o extrato cronológico fornecido abaixo para dar respostas com os valores e períodos exatos.
-          - Se o usuário perguntar por uma categoria que não está listada nas despesas abaixo, responda amigavelmente informando que não encontrou nenhum registro recente associado àquele nome específico.
-          - Nunca diga que os dados da conta "não foram informados" ou que não possui acesso ao banco de dados.
-          - Formate os números financeiros usando Markdown (ex: **R$ 150,00**).
-          - Resposta concisa e direta (máximo de 3 parágrafos).`
-        },
-        {
-          role: "user",
-          content: `MÉTRICAS DETALHADAS DO BANCO DE DADOS DO USUÁRIO:
-          
-          [CALENDÁRIO DO SISTEMA]
-          * Data de Referência Atual: ${dataAtual}
+    const messages = [
+      {
+        role: 'system',
+        content: `Você é o Mentor Financeiro Exclusivo do ecossistema FinanceMax. Responda de forma concisa e exata, formatando valores financeiros em Markdown.`
+      },
+      {
+        role: 'user',
+        content: `MÉTRICAS: Receitas R$ ${summary.balanco.receitas}, Gastos R$ ${summary.balanco.gastosTotal}, Saldo R$ ${summary.balanco.saldoLivre}\n\nPergunta: ${question}\n\nDespesas por categoria:\n${stringGastosCat}`
+      }
+    ];
 
-          [EXTRATO CRONOLÓGICO RECENTE (ÚLTIMAS 30 MOVIMENTAÇÕES)]
-          ${summary.extratoCronologico}
-
-          [RESUMO GLOBAL]
-          * Total de Movimentações: ${summary.volumeTransacoes}
-          * Receitas Totais: R$ ${summary.balanco.receitas}
-          * Gastos Totais Gerais: R$ ${summary.balanco.gastosTotal}
-          * Saldo de Caixa Livre: R$ ${summary.balanco.saldoLivre}
-          * Total Alocado em Investimentos: R$ ${summary.balanco.totalInvestido}
-          * Capacidade de Poupança: ${summary.balanco.taxaPoupanca}
-
-          [DETALHAMENTO DE DESPESAS POR CATEGORIA]
-          ${stringGastosCat}
-
-          [DETALHAMENTO DE ENTRADAS POR CATEGORIA]
-          ${stringEntradasCat}
-
-          [OUTROS COMPONENTES DO ECOSSISTEMA]
-          * Caixinhas/Metas: ${summary.metas.map(m => `${m.nome} (${m.progresso}%, falta R$ ${m.restante})`).join(", ") || "Sem caixinhas ativas."}
-          * Itens na Wishlist: ${summary.detalhes.itensWishlist.join(", ") || "Nenhum item pendente."}
-          * Portfólio de Ativos: ${summary.detalhes.nomesInvestimentos.join(", ") || "Nenhum investimento ativo registrado."}
-
-          PERGUNTA FORMULADA PELO USUÁRIO: "${question}"`
-        }
-      ],
-      model: "llama-3.3-70b-versatile",
-      temperature: 0.15,
-    });
-
-    const answer = completion.choices[0]?.message?.content || "Não consegui processar a varredura da sua conta neste instante. Tente novamente.";
-    
-    console.log("[CHAT IA] Resposta rica enviada com sucesso para o Modal.");
-    res.json({ answer });
+    try {
+      const completion = await callModel(messages, { 
+        model: 'llama-3.3-70b-versatile', 
+        temperature: 0.15 
+      });
+      console.log('[CHAT IA] Completion raw response:', JSON.stringify(completion, null, 2));
+      const answer = completion.choices?.[0]?.message?.content || 'Não consegui processar a varredura da sua conta neste instante. Tente novamente.';
+      console.log('[CHAT IA] Resposta processada:', answer);
+      return res.json({ answer });
+    } catch (err) {
+      console.error('[CHAT IA] Error calling model:', err);
+      const retryAfterChat = extractRetryAfter(err);
+      if (err?.status === 429 || err?.error?.error?.code === 'rate_limit_exceeded') {
+        console.warn('[CHAT IA] Rate limit detected — returning fallback answer. Retry-After:', retryAfterChat);
+        const topCat = Object.entries(summary.detalhes.gastosPorCategoria || {}).sort((a,b) => b[1]-a[1])[0];
+        const topCatText = topCat ? `${topCat[0]} (R$ ${Number(topCat[1]).toFixed(2)})` : 'nenhuma categoria relevante';
+        const fallbackAnswer = `Fallback IA: com base nas últimas ${summary.volumeTransacoes} transações, seu saldo livre é R$ ${summary.balanco.saldoLivre}. Maior gasto: ${topCatText}. Recomendação inicial: reveja despesas em ${topCatText}.`;
+        return res.status(200).json({ answer: fallbackAnswer, fallback: true, retryAfterSeconds: retryAfterChat });
+      }
+      throw err;
+    }
 
   } catch (error) {
-    console.error("Erro na consulta do Chat IA:", error);
-    res.status(500).json({ error: "O motor de inteligência artificial encontrou uma instabilidade temporária." });
+    console.error('Erro na consulta do Chat IA:', error);
+    res.status(500).json({ error: 'O motor de inteligência artificial encontrou uma instabilidade temporária.' });
   }
+};
+
+const createFallbackReport = (summary) => {
+  const bal = summary.balanco || {};
+  const maiorCategoria = Object.entries(summary.detalhes.gastosPorCategoria || {}).sort((a,b) => b[1]-a[1])[0];
+  const maiorGasto = maiorCategoria ? { categoria: maiorCategoria[0], valor: `R$ ${Number(maiorCategoria[1] || 0).toFixed(2)}` } : { categoria: 'Nenhuma', valor: 'R$ 0,00' };
+
+  const saldoLivre = Number(bal.saldoLivre || 0);
+  const receitas = Number(bal.receitas || 0) || 0;
+  const eficienciaRetencao = receitas > 0 ? Math.round((saldoLivre / receitas) * 100) : 0;
+
+  const conselhoCurto = receitas <= 0
+    ? 'Receitas insuficientes para análise detalhada; priorize aumento de entradas e revisão de recorrências.'
+    : `Saldo livre de R$ ${Number(saldoLivre).toFixed(2)} — considere revisar as categorias com maior gasto e reduzir despesas variantes.`;
+
+  return {
+    conselhoCurto,
+    eficienciaRetencao,
+    alertas: (saldoLivre < 0) ? ['Fluxo de caixa negativo: reveja saídas imediatas.'] : [],
+    pontosPositivos: (Number(bal.totalInvestido || 0) > 0) ? ['Há alocação em investimentos, boa sinalização de reserva.'] : [],
+    pontosNegativos: (saldoLivre < 0) ? ['Saldo livre negativo'] : [],
+    maioresGastos: [maiorGasto],
+    estrategias: [{ acao: 'Reavaliar assinaturas e custos fixos', impacto: 10 }],
+    _fallback: true
+  };
 };
 
 // POST /api/ai/strategy-audit
@@ -266,7 +359,6 @@ export const analyzeStrategyStructure = async (req, res) => {
       return res.status(400).json({ error: 'Board inválido. Envie um array de cards.' });
     }
 
-    // Simplifica a estrutura para o prompt
     const simplified = board.map(card => ({
       id: card._id || card.id,
       title: card.title,
@@ -279,26 +371,66 @@ export const analyzeStrategyStructure = async (req, res) => {
       }))
     }));
 
-    const prompt = `Analise esta estrutura UML de estratégia composta por ${simplified.length} cards. Retorne um JSON com recomendações claras sobre:
-    1) Quando usar conexões vermelhas (representando transações negativas) e verdes (transações positivas);
-    2) Sugestões para reorganizar cards que apresentem muitas conexões opostas ou valores inconsistentes;
-    3) Recomendações práticas para agrupar/renomear cards ou transformar ligações em categorias.
+    const prompt = `Analise esta estrutura UML de estratégia composta por ${simplified.length} cards. Retorne um JSON com recomendações claras sobre organização, conflitos de tipo (vermelho/verde) e sugestões de agrupamento.`;
 
-    Estrutura enviada: ${JSON.stringify(simplified).slice(0, 2000)}
-    OBS: Retorne um JSON com os campos: { summary, recommendations: [], structuralChanges: [] }`;
+    try {
+      const messages = [
+        { 
+          role: 'system', 
+          content: `Você é um auditor de arquitetura UML especializado em modelagem financeira.
+          RESPONDA EXCLUSIVAMENTE NO FORMATO JSON ABAIXO:
+          {
+            "summary": "string",
+            "recommendations": [{"acao": "string", "impacto": número, "cardId": "string"}],
+            "structuralChanges": [{"cardId": "string", "issue": "string", "suggestion": "string"}]
+          }`
+        },
+        { role: 'user', content: `${prompt}\nEstrutura: ${JSON.stringify(simplified).slice(0,2000)}` }
+      ];
+      const completion = await callModel(messages, {
+        model: 'llama-3.3-70b-versatile',
+        response_format: { type: 'json_object' },
+        temperature: 0.1
+      });
 
-    const completion = await groq.chat.completions.create({
-      messages: [
-        { role: 'system', content: 'Você é um auditor de arquitetura UML especializado em modelagem financeira e transacional. Forneça recomendações técnicas e acionáveis em JSON.' },
-        { role: 'user', content: prompt }
-      ],
-      model: 'llama-3.3-70b-versatile',
-      response_format: { type: 'json_object' },
-      temperature: 0.1
-    });
+      console.log('[AI AUDIT] Completion raw response:', JSON.stringify(completion, null, 2));
+      const auditText = completion.choices?.[0]?.message?.content || '{}';
+      console.log('[AI AUDIT] Raw message content:', auditText);
+      const aiData = JSON.parse(auditText || '{}');
+      console.log('[AI AUDIT] Parsed audit data:', JSON.stringify(aiData, null, 2));
+      return res.json({ insight: aiData });
+    } catch (err) {
+      console.error('[AI AUDIT] Error calling model:', err);
+      if (err?.status === 429 || err?.error?.error?.code === 'rate_limit_exceeded') {
+        const retryAfterAudit = extractRetryAfter(err);
+        console.warn('[AI AUDIT] Rate limit detected — returning structural fallback. Retry-After:', retryAfterAudit);
 
-    const aiData = JSON.parse(completion.choices[0]?.message?.content || '{}');
-    res.json({ insight: aiData });
+        // Simple local structural analysis fallback
+        const degrees = {};
+        simplified.forEach(c => { degrees[c.id] = (degrees[c.id] || 0) + (c.connections || []).length; });
+        const maxCard = Object.entries(degrees).sort((a,b) => b[1]-a[1])[0];
+        const recommendations = [];
+        if (maxCard && maxCard[1] > 4) recommendations.push({ acao: 'Dividir card com muitas conexões', impacto: 20, cardId: maxCard[0] });
+        // detect conflicting connection types per card
+        const structuralChanges = [];
+        simplified.forEach(c => {
+          const types = Array.from(new Set((c.connections || []).map(x => x.type)));
+          if (types.includes('red-line') && types.includes('green-line')) {
+            structuralChanges.push({ cardId: c.id, issue: 'Conexões opostas (vermelha e verde)', suggestion: 'Rever modelo e usar agrupamento ou separar responsabilidades' });
+          }
+        });
+
+        return res.status(200).json({
+          summary: `Análise rápida local: ${simplified.length} cards, card mais conectado: ${maxCard ? maxCard[0] : 'nenhum'}`,
+          recommendations,
+          structuralChanges,
+          _fallback: true,
+          retryAfterSeconds: retryAfterAudit
+        });
+      }
+      throw err;
+    }
+
   } catch (error) {
     console.error('Erro na auditoria de estratégia IA:', error);
     res.status(500).json({ error: 'Erro interno ao auditar estrutura.' });

@@ -110,6 +110,7 @@ const StrategyHeader = ({
         <button onClick={() => setIsCatModalOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all border bg-bg-main border-border-ui text-text-secondary hover:text-brand hover:border-brand">
           <Tag size={14} /> Categoria
         </button>
+        {/* Auditor IA removed from header - available via layout/sidebar */}
       </div>
     </div>
     </header>

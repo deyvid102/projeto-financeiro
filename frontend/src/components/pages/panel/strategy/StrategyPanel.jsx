@@ -210,6 +210,8 @@ const StrategyPanel = () => {
     return () => window.removeEventListener('keydown', handleKeyboardShortcuts);
   }, [handleUndo, handleRedo]);
 
+  // AI audit triggered from layout/sidebar elsewhere; header trigger removed.
+
   const handleOpenDelete = (id, type, parentId = null) => {
     setItemToDelete({ id, type, parentId });
     setIsConfirmOpen(true);
@@ -364,7 +366,7 @@ const StrategyPanel = () => {
 
     const updatedConnections = [
       ...existingConnections.map(c => ({ targetId: extractTargetId(c), fromSide: 'center', type: c.type || 'line' })),
-      { targetId: targetCard._id, fromSide: 'center', type: selectedLineType }
+      { targetId: targetCard._id, fromSide: 'center', type: selectedLineType, amount: 0 }
     ];
 
     try {
@@ -376,6 +378,29 @@ const StrategyPanel = () => {
     
     setLinkingSource(null);
     closeAllMenus();
+  };
+
+  const handleUpdateConnection = async (sourceCardId, targetId, updates = {}) => {
+    const sourceCard = cards.find(c => String(c._id) === String(sourceCardId));
+    if (!sourceCard) return;
+    const updatedConnections = (sourceCard.connectedTo || []).map(c => {
+      const cId = extractTargetId(c);
+      if (String(cId) === String(targetId)) {
+        return { ...c, targetId: cId, type: updates.type || c.type, amount: updates.amount !== undefined ? updates.amount : (c.amount || 0) };
+      }
+      return { ...c, targetId: cId };
+    });
+    try {
+      await api.put(`/strategy/cards/${sourceCardId}`, { connectedTo: updatedConnections });
+      fetchData();
+    } catch (error) {
+      console.error('Erro ao atualizar conexão:', error);
+    }
+  };
+
+  const handleUpdateLineAmount = async (sourceCardId, targetId, amount) => {
+    const value = Number(amount) || 0;
+    await handleUpdateConnection(sourceCardId, targetId, { amount: value });
   };
 
   const handleUpdateLineType = async (sourceCardId, targetId, newType) => {
@@ -633,6 +658,7 @@ const StrategyPanel = () => {
         handleCreateAtPosition={handleCreateAtPosition}
         handleLineContextMenu={handleLineContextMenu}
         handleUpdateLineType={handleUpdateLineType}
+        handleUpdateLineAmount={handleUpdateLineAmount}
         handleRemoveConnection={handleRemoveConnection}
         handleCardContextMenu={handleCardContextMenu}
         handleStartLinking={handleStartLinking}

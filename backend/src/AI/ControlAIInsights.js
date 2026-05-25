@@ -255,3 +255,52 @@ export const askFinancialAi = async (req, res) => {
     res.status(500).json({ error: "O motor de inteligência artificial encontrou uma instabilidade temporária." });
   }
 };
+
+// POST /api/ai/strategy-audit
+export const analyzeStrategyStructure = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { board } = req.body;
+
+    if (!board || !Array.isArray(board)) {
+      return res.status(400).json({ error: 'Board inválido. Envie um array de cards.' });
+    }
+
+    // Simplifica a estrutura para o prompt
+    const simplified = board.map(card => ({
+      id: card._id || card.id,
+      title: card.title,
+      position: card.position,
+      childCount: (card.childCards || []).length,
+      connections: (card.connectedTo || []).map(c => ({
+        targetId: c.targetId?._id || c.targetId,
+        type: c.type,
+        amount: Number(c.amount) || 0
+      }))
+    }));
+
+    const prompt = `Analise esta estrutura UML de estratégia composta por ${simplified.length} cards. Retorne um JSON com recomendações claras sobre:
+    1) Quando usar conexões vermelhas (representando transações negativas) e verdes (transações positivas);
+    2) Sugestões para reorganizar cards que apresentem muitas conexões opostas ou valores inconsistentes;
+    3) Recomendações práticas para agrupar/renomear cards ou transformar ligações em categorias.
+
+    Estrutura enviada: ${JSON.stringify(simplified).slice(0, 2000)}
+    OBS: Retorne um JSON com os campos: { summary, recommendations: [], structuralChanges: [] }`;
+
+    const completion = await groq.chat.completions.create({
+      messages: [
+        { role: 'system', content: 'Você é um auditor de arquitetura UML especializado em modelagem financeira e transacional. Forneça recomendações técnicas e acionáveis em JSON.' },
+        { role: 'user', content: prompt }
+      ],
+      model: 'llama-3.3-70b-versatile',
+      response_format: { type: 'json_object' },
+      temperature: 0.1
+    });
+
+    const aiData = JSON.parse(completion.choices[0]?.message?.content || '{}');
+    res.json({ insight: aiData });
+  } catch (error) {
+    console.error('Erro na auditoria de estratégia IA:', error);
+    res.status(500).json({ error: 'Erro interno ao auditar estrutura.' });
+  }
+};

@@ -1,5 +1,5 @@
 import express from 'express';
-import { getFinancialAiReport, askFinancialAi } from './ControlAIInsights.js';
+import { getFinancialAiReport, askFinancialAi, analyzeStrategyStructure } from './ControlAIInsights.js';
 import auth from '../middleware/AuthMiddleware.js';
 
 const router = express.Router();
@@ -9,5 +9,6 @@ router.get('/report', auth, getFinancialAiReport);
 
 // Rota: POST /api/ai/ask - Chat Interativo com a IA
 router.post('/ask', auth, askFinancialAi);
+router.post('/strategy-audit', auth, analyzeStrategyStructure);
 
 export default router;

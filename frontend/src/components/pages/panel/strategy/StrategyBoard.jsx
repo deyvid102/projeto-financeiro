@@ -22,6 +22,7 @@ const StrategyBoard = forwardRef(({
   handleCreateAtPosition,
   handleLineContextMenu,
   handleUpdateLineType,
+  handleUpdateLineAmount,
   handleRemoveConnection,
   handleCardContextMenu,
   handleStartLinking,
@@ -114,7 +115,7 @@ const StrategyBoard = forwardRef(({
     >
       {/* Menus de Contexto (fora do container escalável para evitar problemas de posicionamento) */}
       {isEditMode && boardContextMenu.visible && (
-        <div className="fixed z-50 p-2 rounded-lg shadow-xl border w-40" style={{ top: boardContextMenu.y, left: boardContextMenu.x, backgroundColor: isDarkMode ? '#1f2937' : '#ffffff', borderColor: isDarkMode ? '#374151' : '#e5e7eb' }}>
+        <div onClick={(e) => e.stopPropagation()} className="fixed z-50 p-2 rounded-lg shadow-xl border w-40" style={{ top: boardContextMenu.y, left: boardContextMenu.x, backgroundColor: isDarkMode ? '#1f2937' : '#ffffff', borderColor: isDarkMode ? '#374151' : '#e5e7eb' }}>
           <button onClick={() => handleCreateAtPosition()} className="flex items-center gap-2 w-full p-2 hover:bg-brand/10 rounded transition-colors text-xs font-bold uppercase">
             <Plus size={14} /> Novo Card
           </button>
@@ -127,13 +128,30 @@ const StrategyBoard = forwardRef(({
       )}
 
       {isEditMode && lineContextMenu.visible && (
-        <div className="fixed z-50 p-2 rounded-lg shadow-xl border w-48 flex flex-col gap-1" style={{ top: lineContextMenu.y, left: lineContextMenu.x, backgroundColor: isDarkMode ? '#1f2937' : '#ffffff', borderColor: isDarkMode ? '#374151' : '#e5e7eb' }}>
+        <div onClick={(e) => e.stopPropagation()} className="fixed z-50 p-2 rounded-lg shadow-xl border w-48 flex flex-col gap-1" style={{ top: lineContextMenu.y, left: lineContextMenu.x, backgroundColor: isDarkMode ? '#1f2937' : '#ffffff', borderColor: isDarkMode ? '#374151' : '#e5e7eb' }}>
           <div className="text-[10px] uppercase opacity-50 px-2 py-0.5 font-bold flex items-center gap-1"><Sliders size={10} /> Tipo de Linha</div>
           {['line', 'dotted-line', 'red-line', 'green-line'].map(type => (
             <button key={type} onClick={() => handleUpdateLineType(lineContextMenu.sourceCardId, lineContextMenu.targetId, type)} className="text-left w-full p-1.5 hover:bg-brand/10 rounded text-xs capitalize font-medium pl-4">
               {type.replace('-', ' ')}
             </button>
           ))}
+          {/* Valor para linhas coloridas */}
+          {(() => {
+            const source = cards.find(c => String(c._id) === String(lineContextMenu.sourceCardId));
+            if (!source) return null;
+            const conn = (source.connectedTo || []).find(c => String((c.targetId && (c.targetId._id || c.targetId)) || c) === String(lineContextMenu.targetId));
+            const connType = conn?.type;
+            const connAmount = conn?.amount || 0;
+            if (connType === 'red-line' || connType === 'green-line') {
+              return (
+                <div className="px-2">
+                  <label className="text-[10px] font-bold uppercase text-text-secondary">Valor da Linha</label>
+                  <input key={`${lineContextMenu.sourceCardId}-${lineContextMenu.targetId}-${connAmount}`} defaultValue={connAmount} onBlur={(e) => handleUpdateLineAmount(lineContextMenu.sourceCardId, lineContextMenu.targetId, e.target.value)} type="number" step="0.01" className="w-full mt-1 p-2 rounded border border-border-ui bg-bg-main text-sm" />
+                </div>
+              );
+            }
+            return null;
+          })()}
           <div className="h-[1px] my-1" style={{ backgroundColor: isDarkMode ? '#374151' : '#e5e7eb' }} />
           <button onClick={() => handleRemoveConnection(lineContextMenu.sourceCardId, lineContextMenu.targetId)} className="flex items-center gap-2 w-full p-2 hover:bg-red-500/10 text-red-500 rounded transition-colors text-xs font-bold uppercase">
             <Trash size={14} /> Excluir Linha
@@ -142,7 +160,7 @@ const StrategyBoard = forwardRef(({
       )}
 
       {isEditMode && cardContextMenu.visible && (
-        <div className="fixed z-50 p-2 rounded-lg shadow-xl border w-56 flex flex-col gap-1" style={{ top: cardContextMenu.y, left: cardContextMenu.x, backgroundColor: isDarkMode ? '#1f2937' : '#ffffff', borderColor: isDarkMode ? '#374151' : '#e5e7eb' }}>
+        <div onClick={(e) => e.stopPropagation()} className="fixed z-50 p-2 rounded-lg shadow-xl border w-56 flex flex-col gap-1" style={{ top: cardContextMenu.y, left: cardContextMenu.x, backgroundColor: isDarkMode ? '#1f2937' : '#ffffff', borderColor: isDarkMode ? '#374151' : '#e5e7eb' }}>
           {!linkingSource && (
             <button onClick={(e) => handleStartLinking(e, cardContextMenu.card)} className="flex items-center gap-2 w-full p-2 hover:bg-blue-500/10 text-blue-500 rounded transition-colors text-xs font-bold uppercase">
               <Link2 size={14} /> Interligar
@@ -215,6 +233,10 @@ const StrategyBoard = forwardRef(({
               <g key={`${String(card._id)}-${String(targetId)}`} className="line-element pointer-events-auto cursor-pointer">
                 <line data-source={String(card._id)} data-target={String(targetId)} x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke="transparent" strokeWidth="16" onContextMenu={(e) => handleLineContextMenu(e, card._id, targetId)} />
                 <line data-source={String(card._id)} data-target={String(targetId)} x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke={lineStyle.stroke} strokeWidth="2.5" strokeDasharray={lineStyle.dash} onContextMenu={(e) => handleLineContextMenu(e, card._id, targetId)} className="hover:stroke-blue-500 transition-colors" />
+                {/* Valor da linha (aparece acima do meio da conexão) */}
+                {((conn && (conn.type === 'red-line' || conn.type === 'green-line')) && (conn.amount !== undefined && conn.amount !== null)) && (
+                  <text x={(start.x + end.x) / 2} y={((start.y + end.y) / 2) - 12} fill={isDarkMode ? '#e5e7eb' : '#111827'} fontSize="12" textAnchor="middle" pointerEvents="none">{formatCurrency(conn.amount)}</text>
+                )}
               </g>
             );
           });

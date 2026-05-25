@@ -63,7 +63,9 @@ const strategyCardSchema = new mongoose.Schema(
         type: String, 
         enum: ['line', 'dotted-line', 'red-line', 'green-line'], 
         default: 'line' 
-      }
+      },
+      // Valor associado apenas relevante para linhas coloridas (red/green)
+      amount: { type: Number, default: 0 }
     }],
 
     // ── Coordenadas de posicionamento na tela ──

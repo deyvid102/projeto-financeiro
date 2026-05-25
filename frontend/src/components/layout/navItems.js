@@ -1,4 +1,4 @@
-import { LayoutDashboard, ReceiptText, TrendingUp, WalletMinimal, Target } from 'lucide-react';
+import { LayoutDashboard, ReceiptText, TrendingUp, WalletMinimal, Target, Compass } from 'lucide-react';
 
 export const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
@@ -6,5 +6,6 @@ export const navItems = [
   { icon: WalletMinimal, label: 'Despesas', path: '/expenses' },
   { icon: TrendingUp, label: 'Investimentos', path: '/investments' },
   { icon: Target, label: 'Caixinhas', path: '/goals' },
+  { icon: Compass, label: 'Estratégia', path: '/strategy' },
 ];
 

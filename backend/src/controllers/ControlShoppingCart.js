@@ -105,3 +105,15 @@ export const deleteCartItem = async (req, res) => {
     res.status(500).json({ message: 'Erro ao deletar item', error: error.message });
   }
 };
+
+export const getCartItemById = async (req, res) => {
+  try {
+    const item = await ShoppingCart.findOne({ _id: req.params.id, user: req.user.id });
+    if (!item) {
+      return res.status(404).json({ message: 'Item não encontrado.' });
+    }
+    res.json(item);
+  } catch (error) {
+    res.status(500).json({ message: 'Erro ao buscar item', error: error.message });
+  }
+};

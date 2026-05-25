@@ -15,6 +15,17 @@ export const getCards = async (req, res) => {
   }
 };
 
+// @desc Get single card by id
+export const getCardById = async (req, res) => {
+  try {
+    const card = await ModelCard.findOne({ _id: req.params.id, user: req.user._id });
+    if (!card) return res.status(404).json({ message: 'Cartão não encontrado.' });
+    res.json(card);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 // ─────────────────────────────────────────────────────────────────
 // @desc   Criar novo cartão
 // @route  POST /api/cards

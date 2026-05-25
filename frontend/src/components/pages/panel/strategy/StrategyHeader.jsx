@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutTemplate, Unlock, Lock, Tag, Link2, FolderTree, Save, RotateCcw, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
+import { LayoutTemplate, Unlock, Lock, Tag, Link2, FolderTree, Save, RotateCcw, RotateCw, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 
 const StrategyHeader = ({ 
   isDarkMode, 
@@ -15,7 +15,9 @@ const StrategyHeader = ({
   zoom,
   setZoom,
   handleUndo,
-  canUndo
+  handleRedo,
+  canUndo,
+  canRedo
 }) => {
   const [isConnMenuOpen, setIsConnMenuOpen] = useState(false);
 
@@ -42,9 +44,17 @@ const StrategyHeader = ({
             disabled={!canUndo} 
             onClick={handleUndo}
             className={`p-2 rounded-full transition-all ${canUndo ? 'hover:bg-brand/10 text-brand' : 'opacity-30 cursor-not-allowed text-text-secondary'}`}
-            title="Desfazer alteracao"
+            title="Desfazer alteração"
           >
             <RotateCcw size={16} />
+          </button>
+          <button 
+            disabled={!canRedo} 
+            onClick={handleRedo}
+            className={`p-2 rounded-full transition-all ${canRedo ? 'hover:bg-brand/10 text-brand' : 'opacity-30 cursor-not-allowed text-text-secondary'}`}
+            title="Refazer alteração"
+          >
+            <RotateCw size={16} />
           </button>
           <div className="flex items-center gap-1 text-[10px] font-bold uppercase opacity-70 text-text-secondary">
             <Save size={12} /> Autosave ON

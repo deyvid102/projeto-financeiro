@@ -1,19 +1,19 @@
 import React from 'react';
-import { Target, TrendingUp, Repeat, ShoppingBag, CreditCard, X } from 'lucide-react';
+import { Target, TrendingUp, Repeat, CreditCard, X } from 'lucide-react';
 
 const CardChildFunction = ({ linkedFunction, onRemove }) => {
   if (!linkedFunction) return null;
 
   const { type, item } = linkedFunction;
+  const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
   const typeConfig = {
     goal: { icon: Target, color: 'text-blue-500', bg: 'bg-blue-500/10', label: 'Caixinha' },
     investment: { icon: TrendingUp, color: 'text-green-500', bg: 'bg-green-500/10', label: 'Investimento' },
     recurrence: { icon: Repeat, color: 'text-orange-500', bg: 'bg-orange-500/10', label: 'Recorrência' },
-    shoppingcart: { icon: ShoppingBag, color: 'text-pink-500', bg: 'bg-pink-500/10', label: 'Lista de Desejos' },
     card: { icon: CreditCard, color: 'text-purple-500', bg: 'bg-purple-500/10', label: 'Cartão' },
   };
 
-  const config = typeConfig[type] || typeConfig.goal;
+  const config = typeConfig[type] || { icon: Target, color: 'text-gray-500', bg: 'bg-gray-500/10', label: 'Função' };
   const Icon = config.icon;
 
   const renderContent = () => {
@@ -31,7 +31,9 @@ const CardChildFunction = ({ linkedFunction, onRemove }) => {
 
     switch (type) {
       case 'goal':
-        const goalProgress = (item.currentAmount / item.targetAmount) * 100;
+        const current = Number(item.currentAmount) || 0;
+        const target = Number(item.targetAmount) || 0;
+        const goalProgress = target > 0 ? (current / target) * 100 : 0;
         return (
           <div className="w-full space-y-1.5">
             <div className="flex items-center justify-between">
@@ -45,19 +47,20 @@ const CardChildFunction = ({ linkedFunction, onRemove }) => {
               />
             </div>
             <p className="text-[8px] text-text-secondary">
-              R$ {item.currentAmount.toFixed(2)} / R$ {item.targetAmount.toFixed(2)}
+              {formatCurrency(current)} / {formatCurrency(target)}
             </p>
           </div>
         );
 
       case 'investment':
+        const invested = Number(item.amountInvested || item.investedAmount || item.currentTotalValue) || 0;
         return (
           <div className="w-full space-y-1.5">
             <p className="text-[9px] font-bold uppercase text-text-secondary">{item.name}</p>
             <div className="flex items-center justify-between">
               <span className="text-[8px] text-text-secondary">{item.type}</span>
               <span className="text-[10px] font-bold text-text-primary">
-                R$ {item.amountInvested.toFixed(2)}
+                {formatCurrency(invested)}
               </span>
             </div>
             {item.ticker && (
@@ -68,13 +71,14 @@ const CardChildFunction = ({ linkedFunction, onRemove }) => {
 
       case 'recurrence':
         const freqLabel = item.frequency === 'monthly' ? 'Mês' : item.frequency === 'weekly' ? 'Semana' : 'Ano';
-        const nextDay = item.dayOfMonth?.[0] || new Date().getDate();
+        const nextDay = Array.isArray(item.dayOfMonth) ? item.dayOfMonth[0] : item.dayOfMonth || new Date().getDate();
+        const amountRec = Number(item.amount) || 0;
         return (
           <div className="w-full space-y-1.5">
             <p className="text-[9px] font-bold uppercase text-text-secondary truncate">{item.title}</p>
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold text-text-primary">
-                R$ {item.amount.toFixed(2)}
+                {formatCurrency(amountRec)}
               </span>
               <span className="text-[8px] text-text-secondary">
                 {freqLabel} • Dia {nextDay}
@@ -88,25 +92,11 @@ const CardChildFunction = ({ linkedFunction, onRemove }) => {
           </div>
         );
 
-      case 'shoppingcart':
-        return (
-          <div className="w-full space-y-1.5">
-            <p className="text-[9px] font-bold uppercase text-text-secondary truncate">{item.itemName}</p>
-            <div className="flex items-center justify-between">
-              <span className="text-[8px] text-text-secondary">{item.category}</span>
-              <span className="text-[10px] font-bold text-text-primary">
-                R$ {item.estimatedPrice.toFixed(2)}
-              </span>
-            </div>
-            {item.notes && (
-              <p className="text-[8px] text-text-secondary truncate italic">{item.notes}</p>
-            )}
-          </div>
-        );
-
       case 'card':
         if (item.type === 'credito') {
-          const creditUsage = (item.usedLimit / item.creditLimit) * 100;
+          const used = Number(item.usedLimit) || 0;
+          const limit = Number(item.creditLimit) || 0;
+          const creditUsage = limit > 0 ? (used / limit) * 100 : 0;
           return (
             <div className="w-full space-y-1.5">
               <p className="text-[9px] font-bold uppercase text-text-secondary">{item.name}</p>
@@ -123,7 +113,7 @@ const CardChildFunction = ({ linkedFunction, onRemove }) => {
                 />
               </div>
               <p className="text-[8px] text-text-secondary">
-                R$ {item.usedLimit.toFixed(2)} / R$ {item.creditLimit.toFixed(2)}
+                {formatCurrency(used)} / {formatCurrency(limit)}
               </p>
             </div>
           );
@@ -135,17 +125,23 @@ const CardChildFunction = ({ linkedFunction, onRemove }) => {
             <div className="flex items-center justify-between">
               <span className="text-[8px] text-text-secondary">Vale Alimentação</span>
               <span className="text-[10px] font-bold text-text-primary">
-                R$ {item.vaBalance.toFixed(2)}
+                {formatCurrency(Number(item.vaBalance) || 0)}
               </span>
             </div>
             <p className="text-[8px] text-text-secondary">
-              Recarga: R$ {item.vaRechargeAmount.toFixed(2)} • Dia {item.vaRechargeDay}
+              Recarga: {formatCurrency(Number(item.vaRechargeAmount) || 0)} • Dia {item.vaRechargeDay}
             </p>
           </div>
         );
 
       default:
-        return null;
+        return (
+          <div className="w-full space-y-1.5">
+            <p className="text-[9px] font-bold uppercase text-text-secondary">Função vinculada</p>
+            <p className="text-[10px] font-bold text-text-primary">{config.label || type}</p>
+            {item?.name && <p className="text-[8px] text-text-secondary truncate">{item.name}</p>}
+          </div>
+        );
     }
   };
 

@@ -7,6 +7,7 @@ import {
   payBill,
   getBillSummary,
   getVaStatement,
+  getCardById,
 } from '../controllers/ControlCard.js';
 import { protect } from '../middleware/AuthMiddleware.js';
 
@@ -19,6 +20,7 @@ router.route('/')
 
 // /api/cards/:id
 router.route('/:id')
+  .get(protect, getCardById)
   .put(protect, updateCard)
   .delete(protect, deleteCard);
 

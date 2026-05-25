@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Target, TrendingUp, Repeat, ShoppingBag, CreditCard, Loader2 } from 'lucide-react';
+import { X, Target, TrendingUp, Repeat, CreditCard, Loader2 } from 'lucide-react';
 import api from '@/services/api';
 
 const ModalFunctionSelector = ({ isOpen, onClose, onSelect }) => {
@@ -12,7 +12,6 @@ const ModalFunctionSelector = ({ isOpen, onClose, onSelect }) => {
     { value: 'goal', label: 'Caixinha', icon: Target, color: 'bg-blue-500/10 text-blue-500' },
     { value: 'investment', label: 'Investimento', icon: TrendingUp, color: 'bg-green-500/10 text-green-500' },
     { value: 'recurrence', label: 'Recorrência', icon: Repeat, color: 'bg-orange-500/10 text-orange-500' },
-    { value: 'shoppingcart', label: 'Lista de Desejos', icon: ShoppingBag, color: 'bg-pink-500/10 text-pink-500' },
     { value: 'card', label: 'Cartão', icon: CreditCard, color: 'bg-purple-500/10 text-purple-500' },
   ];
 
@@ -29,9 +28,6 @@ const ModalFunctionSelector = ({ isOpen, onClose, onSelect }) => {
           break;
         case 'recurrence':
           endpoint = '/recurrences';
-          break;
-        case 'shoppingcart':
-          endpoint = '/shopping-cart?itemStatus=pending';
           break;
         case 'card':
           endpoint = '/cards';
@@ -67,8 +63,6 @@ const ModalFunctionSelector = ({ isOpen, onClose, onSelect }) => {
         return `${item.name} (${item.type}) - R$ ${item.amountInvested}`;
       case 'recurrence':
         return `${item.title} - R$ ${item.amount}`;
-      case 'shoppingcart':
-        return `${item.itemName} - R$ ${item.estimatedPrice}`;
       case 'card':
         return item.type === 'credito' 
           ? `${item.name} - R$ ${item.usedLimit}/${item.creditLimit}`

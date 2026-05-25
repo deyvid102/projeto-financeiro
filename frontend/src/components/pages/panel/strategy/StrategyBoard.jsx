@@ -1,5 +1,5 @@
 import React, { forwardRef } from 'react';
-import { Plus, Sliders, Trash, Link2, Unlink, Component, Trash2, GripHorizontal, Edit2, MousePointerClick } from 'lucide-react';
+import { Plus, Sliders, Trash, Link2, Unlink, Component, Trash2, GripHorizontal, Edit2, Copy, MousePointerClick } from 'lucide-react';
 import CardChildFunction from '@/components/CardChildFunction';
 
 const StrategyBoard = forwardRef(({
@@ -27,9 +27,15 @@ const StrategyBoard = forwardRef(({
   handleStartLinking,
   handleCompleteConnection,
   handleMouseDown,
+  handleBoardMouseDown,
+  handlePasteCard,
+  handlePasteChild,
+  clipboard,
   handleStartEdit,
   handleSaveTitle,
   handleOpenDelete,
+  handleCopyCard,
+  handleCopyChild,
   setActiveParentId,
   setEditingChild,
   setIsFilhoModalOpen,
@@ -40,15 +46,70 @@ const StrategyBoard = forwardRef(({
   getLineStyle,
   extractTargetId
 }, ref) => {
+  const formatCurrency = (val) => 
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+
+  // Helper para extrair os dados financeiros independente da estrutura de população
+  const getFinancialData = (child) => {
+    const linked = child.linkedFunction;
+    // Tentamos pegar o item populado, ou o objeto vinculado
+    const data = (linked && typeof linked === 'object' && linked.item) ? linked.item : (linked && linked.item ? linked.item : linked || {});
+
+    // Detecta tipo preferencialmente pelo `linked.type`, se ausente tenta inferir pelas propriedades do `item`
+    let type = linked?.type || null;
+    try {
+      const props = data || {};
+      if (!type) {
+        if (props.targetAmount !== undefined || props.currentAmount !== undefined) type = 'goal';
+        else if (props.vaBalance !== undefined || props.vaRechargeAmount !== undefined) type = 'card';
+        else if (props.usedLimit !== undefined || props.creditLimit !== undefined) type = 'card';
+        else if (props.amountInvested !== undefined || props.currentTotalValue !== undefined || props.ticker !== undefined) type = 'investment';
+        else if (props.estimatedPrice !== undefined || props.itemName !== undefined || props.price !== undefined) type = 'shoppingcart';
+        else if (props.frequency !== undefined || props.amount !== undefined) type = 'recurrence';
+      }
+    } catch (e) {
+      // silencioso — não prejudica render
+    }
+
+    return { data, type };
+  };
+
+  // Renderiza detalhes do child usando o componente consolidado `CardChildFunction`.
+  // Passa o `linkedFunction` original (populado pelo backend) para manter o mesmo formato
+  const renderChildDetails = (child) => {
+    return <CardChildFunction linkedFunction={child.linkedFunction || null} />;
+  };
+
+  const getBoardDimensions = (cardsList) => {
+    const padding = 220;
+    let width = 1000;
+    let height = 800;
+
+    (cardsList || []).forEach(card => {
+      const cardWidth = getCardWidth(card.size);
+      const cardHeight = getCardHeight(card);
+      const x = card.position?.x || 0;
+      const y = card.position?.y || 0;
+      width = Math.max(width, x + cardWidth + padding);
+      height = Math.max(height, y + cardHeight + padding);
+    });
+
+    return {
+      width: Math.min(Math.max(width, 1000), 4000),
+      height: Math.min(Math.max(height, 800), 4000),
+    };
+  };
+
   return (
-    <div 
-      ref={ref} 
-      className="flex-1 relative overflow-auto cursor-crosshair transition-colors duration-300" 
-      style={{ backgroundColor: isDarkMode ? '#030712' : '#f9fafb' }} 
-      onContextMenu={handleBoardContextMenu} 
+    <div
+      ref={ref}
+      className="flex-1 relative overflow-auto cursor-crosshair transition-colors duration-300"
+      style={{ backgroundColor: isDarkMode ? '#030712' : '#f9fafb' }}
+      onContextMenu={handleBoardContextMenu}
+      onMouseDown={handleBoardMouseDown}
       onClick={closeAllMenus}
-      onMouseMove={handleMouseMove} 
-      onMouseUp={handleGlobalMouseUp} 
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleGlobalMouseUp}
       onMouseLeave={handleGlobalMouseUp}
     >
       {/* Menus de Contexto (fora do container escalável para evitar problemas de posicionamento) */}
@@ -57,6 +118,11 @@ const StrategyBoard = forwardRef(({
           <button onClick={() => handleCreateAtPosition()} className="flex items-center gap-2 w-full p-2 hover:bg-brand/10 rounded transition-colors text-xs font-bold uppercase">
             <Plus size={14} /> Novo Card
           </button>
+          {clipboard?.type === 'card' && (
+            <button onClick={() => handlePasteCard(null)} className="flex items-center gap-2 w-full p-2 hover:bg-brand/10 rounded transition-colors text-xs font-bold uppercase">
+              <Copy size={14} /> Colar Card
+            </button>
+          )}
         </div>
       )}
 
@@ -80,6 +146,19 @@ const StrategyBoard = forwardRef(({
           {!linkingSource && (
             <button onClick={(e) => handleStartLinking(e, cardContextMenu.card)} className="flex items-center gap-2 w-full p-2 hover:bg-blue-500/10 text-blue-500 rounded transition-colors text-xs font-bold uppercase">
               <Link2 size={14} /> Interligar
+            </button>
+          )}
+          <button onClick={() => handleCopyCard(cardContextMenu.card)} className="flex items-center gap-2 w-full p-2 hover:bg-brand/10 rounded transition-colors text-xs font-bold uppercase">
+            <Copy size={14} /> Copiar Card
+          </button>
+          {clipboard?.type === 'card' && (
+            <button onClick={() => handlePasteCard(cardContextMenu.card)} className="flex items-center gap-2 w-full p-2 hover:bg-brand/10 rounded transition-colors text-xs font-bold uppercase">
+              <Copy size={14} /> Colar Card
+            </button>
+          )}
+          {clipboard?.type === 'child' && (
+            <button onClick={() => handlePasteChild(cardContextMenu.card._id)} className="flex items-center gap-2 w-full p-2 hover:bg-brand/10 rounded transition-colors text-xs font-bold uppercase">
+              <Copy size={14} /> Colar Item
             </button>
           )}
           {linkingSource && String(linkingSource._id) !== String(cardContextMenu.card._id) && (
@@ -112,12 +191,12 @@ const StrategyBoard = forwardRef(({
       )}
       {/* Container Escalável */}
       <div 
-        className="absolute top-0 left-0 transition-transform duration-200 ease-out" 
+        className="absolute top-0 left-0 transition-transform duration-200 ease-out min-w-full min-h-[100vh]"
         style={{ 
           transform: `scale(${zoom})`, 
           transformOrigin: '0 0',
-          width: '4000px', // Área de trabalho grande
-          height: '4000px' 
+          width: `${getBoardDimensions(cards).width}px`,
+          height: `${getBoardDimensions(cards).height}px`
         }}
       >
       {/* SVG das Linhas */}
@@ -170,6 +249,8 @@ const StrategyBoard = forwardRef(({
               left: card.position?.x || 0, 
               top: card.position?.y || 0,
               width: `${cardWidth}px`,
+              maxWidth: 'calc(100vw - 2rem)',
+              minWidth: '240px',
               height: `${cardHeight}px`, 
               backgroundColor: isDarkMode ? '#1f2937' : '#ffffff',
               borderColor: isDarkMode ? '#374151' : '#e5e7eb',
@@ -195,29 +276,26 @@ const StrategyBoard = forwardRef(({
             <div className="p-3 flex flex-col gap-2 no-drag overflow-hidden flex-1 justify-between">
               <div className="flex flex-col gap-2 overflow-y-auto">
                 {card.childCards?.map((child) => (
-                  <div key={child._id} className="flex flex-col gap-2">
-                    <div className="bg-gray-100/50 dark:bg-gray-800/50 p-2.5 rounded-lg border border-gray-200/50 dark:border-gray-700/50 flex justify-between items-start group">
+                  <div key={child._id} className="bg-gray-100/40 dark:bg-gray-800/40 p-2.5 rounded-xl border border-black/5 dark:border-white/5 flex flex-col group transition-all hover:bg-gray-100/60 dark:hover:bg-gray-800/60">
+                    <div className="flex justify-between items-start mb-1">
                       <div className="flex-1 min-w-0">
-                        <div className="flex gap-1 mb-1">
+                        <div className="flex flex-wrap gap-1 mb-1">
                           {Array.isArray(child.category)
                             ? child.category.map(cat => <span key={cat._id} className="text-[8px] px-1.5 py-0.5 rounded font-black uppercase" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>{cat.name}</span>)
                             : child.category && <span className="text-[8px] px-1.5 py-0.5 rounded font-black uppercase" style={{ backgroundColor: `${child.category.color}20`, color: child.category.color }}>{child.category.name}</span>
                           }
                         </div>
-                        <div className="text-xs font-bold truncate">{child.name}</div>
+                        <div className="text-[11px] font-black truncate text-text-primary leading-tight">{child.name}</div>
                       </div>
                       {isEditMode && (
                         <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity ml-2">
-                          <button onClick={(e) => { e.stopPropagation(); setActiveParentId(card._id); setEditingChild(child); setIsFilhoModalOpen(true); }} className="text-blue-500 p-1 hover:bg-blue-500/10 rounded"><Edit2 size={12} /></button>
-                          <button onClick={(e) => { e.stopPropagation(); handleOpenDelete(child._id, 'child', card._id); }} className="text-red-500 p-1 hover:bg-red-500/10 rounded"><Trash2 size={12} /></button>
+                          <button onClick={(e) => { e.stopPropagation(); handleCopyChild(card._id, child); }} className="text-text-secondary p-1 hover:bg-brand/10 rounded"><Copy size={10} /></button>
+                          <button onClick={(e) => { e.stopPropagation(); setActiveParentId(card._id); setEditingChild(child); setIsFilhoModalOpen(true); }} className="text-brand p-1 hover:bg-brand/10 rounded"><Edit2 size={10} /></button>
+                          <button onClick={(e) => { e.stopPropagation(); handleOpenDelete(child._id, 'child', card._id); }} className="text-red-500 p-1 hover:bg-red-500/10 rounded"><Trash2 size={10} /></button>
                         </div>
                       )}
                     </div>
-                    {child.linkedFunction && (
-                      <div className="scale-90 origin-top-left">
-                        <CardChildFunction linkedFunction={child.linkedFunction} />
-                      </div>
-                    )}
+                    {renderChildDetails(child)}
                   </div>
                 ))}
               </div>

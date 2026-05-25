@@ -17,8 +17,6 @@ const StrategyPanel = () => {
   const dragRef = useRef({
     cardId: null,
     element: null,
-    offsetX: 0,
-    offsetY: 0,
     currentX: 0,
     currentY: 0,
     startMouseX: 0,
@@ -26,9 +24,19 @@ const StrategyPanel = () => {
     startCardX: 0,
     startCardY: 0
   });
+  const boardDragRef = useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+    startLeft: 0,
+    startTop: 0,
+    suppressContextMenu: false
+  });
 
   const [cards, setCards] = useState([]);
   const [history, setHistory] = useState([]);
+  const [redoStack, setRedoStack] = useState([]);
+  const [clipboard, setClipboard] = useState(null);
   const [categories, setCategories] = useState([]);
   
   const [isEditMode, setIsEditMode] = useState(false);
@@ -61,14 +69,56 @@ const StrategyPanel = () => {
         api.get('/strategy/cards'),
         api.get('/strategy/categories')
       ]);
-      const loadedCards = cardsRes.data || [];
-      setCards(loadedCards);
+      let loadedCards = cardsRes.data || [];
       setCategories(catRes.data || []);
       
+      // ── Popula linkedFunction.item apenas quando necessário; evita re-fetch quando servidor já trouxe o item ──
+      // Cache simples por tipo para evitar multiplas chamadas da mesma lista
+      const listCache = {};
+
+      const fetchItemFromCollection = async (type, id) => {
+        try {
+          const map = {
+            card: '/cards',
+            recurrence: '/recurrences',
+            goal: '/goals',
+            shoppingcart: '/shoppingcarts',
+            investment: '/investments'
+          };
+          const endpoint = map[type];
+          if (!endpoint) return null;
+
+          if (!listCache[type]) {
+            const res = await api.get(endpoint);
+            listCache[type] = Array.isArray(res.data) ? res.data : [];
+          }
+          return listCache[type].find(it => String(it._id) === String(id)) || null;
+        } catch (err) {
+          return null;
+        }
+      };
+
+      const cardsWithPopulatedLinkedFunctions = await Promise.all(loadedCards.map(async (card) => {
+        const populatedChildCards = await Promise.all((card.childCards || []).map(async (child) => {
+          // Se já veio populado pelo backend, não buscamos novamente
+          if (child.linkedFunction && child.linkedFunction.item) return child;
+
+          if (child.linkedFunction && child.linkedFunction.referenceId && child.linkedFunction.type) {
+            const fetched = await fetchItemFromCollection(child.linkedFunction.type, child.linkedFunction.referenceId);
+            if (fetched) {
+              return { ...child, linkedFunction: { ...child.linkedFunction, item: fetched } };
+            }
+            return child;
+          }
+          return child;
+        }));
+        return { ...card, childCards: populatedChildCards };
+      }));
+
+      setCards(cardsWithPopulatedLinkedFunctions);
+
       // Inicializa histórico se vazio
-      if (history.length === 0) {
-        setHistory([JSON.stringify(loadedCards)]);
-      }
+      if (history.length === 0) { setHistory([JSON.stringify(cardsWithPopulatedLinkedFunctions)]); }
     } catch (error) {
       console.error('Erro ao buscar dados:', error);
     }
@@ -95,23 +145,154 @@ const StrategyPanel = () => {
     }
   };
 
+  const getCleanCategoryIds = (category) => {
+    if (!category) return [];
+    if (Array.isArray(category)) return category.map(cat => cat._id || cat);
+    return [category._id || category];
+  };
+
+  const getCleanChildPayload = (child) => ({
+    name: child.name,
+    description: child.description,
+    category: getCleanCategoryIds(child.category),
+    linkedFunction: child.linkedFunction ? {
+      type: child.linkedFunction.type,
+      referenceId: child.linkedFunction.referenceId
+    } : null
+  });
+
   const saveToHistory = (newCards) => {
     const state = JSON.stringify(newCards);
     setHistory(prev => [state, ...prev.slice(0, 19)]); // Mantém 20 estados
+    setRedoStack([]);
   };
 
   const handleUndo = () => {
     if (history.length <= 1) return;
-    const [_, previous, ...rest] = history;
+    const [current, previous, ...rest] = history;
     const restoredCards = JSON.parse(previous);
     setCards(restoredCards);
     setHistory([previous, ...rest]);
+    setRedoStack(prev => [current, ...prev]);
     // Aqui você poderia sincronizar com a API se desejar persistir o undo
   };
+
+  const handleRedo = () => {
+    if (redoStack.length === 0) return;
+    const [next, ...rest] = redoStack;
+    const restoredCards = JSON.parse(next);
+    setCards(restoredCards);
+    setHistory(prev => [next, ...prev]);
+    setRedoStack(rest);
+  };
+
+  useEffect(() => {
+    const handleKeyboardShortcuts = (e) => {
+      const isCommand = e.metaKey || e.ctrlKey;
+      if (!isCommand) return;
+
+      if (e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+      }
+
+      if (e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyboardShortcuts);
+    return () => window.removeEventListener('keydown', handleKeyboardShortcuts);
+  }, [handleUndo, handleRedo]);
 
   const handleOpenDelete = (id, type, parentId = null) => {
     setItemToDelete({ id, type, parentId });
     setIsConfirmOpen(true);
+  };
+
+  const handleCopyCard = (card) => {
+    const payload = {
+      title: card.title,
+      size: card.size,
+      shape: card.shape,
+      childCards: (card.childCards || []).map(getCleanChildPayload),
+      originalPosition: card.position || { x: 100, y: 120 }
+    };
+    setClipboard({ type: 'card', payload });
+    setAlertStyleMessage('Card copiado. Use Colar no card ou no quadro.');
+    setAlertStyleType('success');
+    closeAllMenus();
+  };
+
+  const handleCopyChild = (parentId, child) => {
+    const payload = getCleanChildPayload(child);
+    setClipboard({ type: 'child', payload, fromParentId: parentId });
+    setAlertStyleMessage('Item filho copiado. Use Colar em outro card pai.');
+    setAlertStyleType('success');
+    closeAllMenus();
+  };
+
+  const handlePasteCard = async (targetCard = null) => {
+    if (!clipboard || clipboard.type !== 'card') return;
+
+    try {
+      const position = targetCard
+        ? { x: (targetCard.position?.x || 100) + 40, y: (targetCard.position?.y || 120) + 40 }
+        : typeof boardContextMenu.x === 'number' && typeof boardContextMenu.y === 'number' && boardRef.current
+          ? (() => {
+              const boardRect = boardRef.current.getBoundingClientRect();
+              return {
+                x: ((boardContextMenu.x - boardRect.left) + boardRef.current.scrollLeft) / zoom,
+                y: ((boardContextMenu.y - boardRect.top) + boardRef.current.scrollTop) / zoom
+              };
+            })()
+          : { x: 100, y: 120 };
+
+      const { payload } = clipboard;
+      const cardPayload = {
+        title: payload.title,
+        size: payload.size,
+        shape: payload.shape,
+        position,
+      };
+
+      const response = await api.post('/strategy/cards', cardPayload);
+      const newCard = response.data;
+
+      if (payload.childCards && payload.childCards.length > 0) {
+        await Promise.all(payload.childCards.map((child) => api.post(`/strategy/cards/${newCard._id}/children`, child)));
+      }
+
+      await fetchData();
+      setAlertStyleMessage('Card colado com sucesso.');
+      setAlertStyleType('success');
+    } catch (error) {
+      console.error('Erro ao colar card:', error);
+      setAlertStyleMessage('Não foi possível colar o card.');
+      setAlertStyleType('danger');
+    }
+    closeAllMenus();
+  };
+
+  const handlePasteChild = async (targetParentId) => {
+    if (!clipboard || clipboard.type !== 'child') return;
+
+    try {
+      await api.post(`/strategy/cards/${targetParentId}/children`, clipboard.payload);
+      await fetchData();
+      setAlertStyleMessage('Item filho colado com sucesso.');
+      setAlertStyleType('success');
+    } catch (error) {
+      console.error('Erro ao colar item filho:', error);
+      setAlertStyleMessage('Não foi possível colar o item filho.');
+      setAlertStyleType('danger');
+    }
+    closeAllMenus();
   };
 
   const confirmDelete = async () => {
@@ -229,6 +410,12 @@ const StrategyPanel = () => {
   };
 
   const handleBoardContextMenu = (e) => {
+    if (boardDragRef.current.suppressContextMenu) {
+      e.preventDefault();
+      boardDragRef.current.suppressContextMenu = false;
+      boardDragRef.current.active = false;
+      return;
+    }
     e.preventDefault();
     if (!isEditMode) return;
     if (e.target.closest('.card-element') || e.target.closest('.line-element')) return;
@@ -259,7 +446,7 @@ const StrategyPanel = () => {
     return conn.targetId;
   };
 
-  const getCardWidth = (size) => (size === 'small' ? 240 : 320);
+  const getCardWidth = (size) => (size === 'small' ? 220 : 280);
 
   const getCardHeight = (card) => {
     const headerHeight = 54;
@@ -291,6 +478,23 @@ const StrategyPanel = () => {
     }
   };
 
+  const handleBoardMouseDown = (e) => {
+    if (!isEditMode || e.button !== 2) return;
+    if (e.target.closest('.card-element') || e.target.closest('.line-element')) return;
+    if (!boardRef.current) return;
+
+    e.preventDefault();
+    boardDragRef.current = {
+      active: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      startLeft: boardRef.current.scrollLeft,
+      startTop: boardRef.current.scrollTop,
+      suppressContextMenu: false
+    };
+    closeAllMenus();
+  };
+
   const handleMouseDown = (e, card) => {
     if (e.button !== 0) return; 
     if (e.target.closest('.no-drag')) return; 
@@ -316,13 +520,25 @@ const StrategyPanel = () => {
   };
 
   const handleMouseMove = (e) => {
-    if (!boardRef.current || !dragRef.current.cardId || !isEditMode) return;
+    if (!boardRef.current || !isEditMode) return;
+
+    if (boardDragRef.current.active) {
+      const deltaX = e.clientX - boardDragRef.current.startX;
+      const deltaY = e.clientY - boardDragRef.current.startY;
+      if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
+        boardDragRef.current.suppressContextMenu = true;
+      }
+      boardRef.current.scrollLeft = boardDragRef.current.startLeft - deltaX;
+      boardRef.current.scrollTop = boardDragRef.current.startTop - deltaY;
+      return;
+    }
+
+    if (!dragRef.current.cardId) return;
 
     const boardRect = boardRef.current.getBoundingClientRect();
     const mouseX = (e.clientX - boardRect.left) + boardRef.current.scrollLeft;
     const mouseY = (e.clientY - boardRect.top) + boardRef.current.scrollTop;
 
-    // Ajusta o delta pelo zoom
     const deltaX = (mouseX - dragRef.current.startMouseX) / zoom;
     const deltaY = (mouseY - dragRef.current.startMouseY) / zoom;
 
@@ -351,10 +567,14 @@ const StrategyPanel = () => {
   };
 
   const handleGlobalMouseUp = async () => {
+    if (boardDragRef.current.active) {
+      boardDragRef.current.active = false;
+      return;
+    }
+
     const { cardId, currentX, currentY } = dragRef.current;
     if (!cardId) return;
 
-    // Limpa a referência IMEDIATAMENTE para evitar que o mousemove continue movendo
     dragRef.current.cardId = null;
     dragRef.current.element = null;
 
@@ -388,7 +608,9 @@ const StrategyPanel = () => {
         zoom={zoom}
         setZoom={setZoom}
         handleUndo={handleUndo}
+        handleRedo={handleRedo}
         canUndo={history.length > 1}
+        canRedo={redoStack.length > 0}
       />
 
       <StrategyBoard 
@@ -416,9 +638,15 @@ const StrategyPanel = () => {
         handleStartLinking={handleStartLinking}
         handleCompleteConnection={handleCompleteConnection}
         handleMouseDown={handleMouseDown}
+        handleBoardMouseDown={handleBoardMouseDown}
         handleStartEdit={handleStartEdit}
         handleSaveTitle={handleSaveTitle}
         handleOpenDelete={handleOpenDelete}
+        handleCopyCard={handleCopyCard}
+        handleCopyChild={handleCopyChild}
+        handlePasteCard={handlePasteCard}
+        handlePasteChild={handlePasteChild}
+        clipboard={clipboard}
         setActiveParentId={setActiveParentId}
         setEditingChild={setEditingChild}
         setIsFilhoModalOpen={setIsFilhoModalOpen}

@@ -39,20 +39,6 @@ const extractRetryAfter = (err) => {
   }
 };
 
-const REQUEST_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes per user
-const lastRequestByUser = new Map();
-
-const checkAndSetUserThrottle = (userId) => {
-  const now = Date.now();
-  const last = lastRequestByUser.get(userId) || 0;
-  const diff = now - last;
-  if (diff < REQUEST_INTERVAL_MS) {
-    return Math.ceil((REQUEST_INTERVAL_MS - diff) / 1000);
-  }
-  lastRequestByUser.set(userId, now);
-  return 0;
-};
-
 const callModel = async (messages, options = {}) => {
   if (!apiKeys.length) throw new Error('No GROQ API keys configured');
   let lastErr = null;
@@ -154,6 +140,8 @@ const gatherUserData = async (userId) => {
     
     return {
       nome: g.name || "Meta sem nome",
+      objetivo: target.toFixed(2),
+      saldoAtual: current.toFixed(2),
       progresso: progressoCalculado,
       restante: Math.max(target - current, 0).toFixed(2)
     };
@@ -191,14 +179,6 @@ export const getFinancialAiReport = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // 1. Aplica o Throttle de 2 minutos por usuário
-    const waitSeconds = checkAndSetUserThrottle(userId);
-    if (waitSeconds > 0) {
-      return res.status(429).json({ 
-        error: `Limite de requisições excedido. Tente novamente em ${waitSeconds} segundos.` 
-      });
-    }
-
     const summary = await gatherUserData(userId);
 
     const messages = [
@@ -233,7 +213,7 @@ export const getFinancialAiReport = async (req, res) => {
     try {
       // 2. Utiliza callModel que rotaciona chaves automaticamente
       const completion = await callModel(messages, { 
-        model: 'llama-3.3-70b-versatile', 
+        model: 'llama-3.1-8b-instant', 
         response_format: { type: 'json_object' }, 
         temperature: 0.15 
       });
@@ -269,14 +249,6 @@ export const askFinancialAi = async (req, res) => {
     const userId = req.user.id;
     const { question } = req.body;
 
-    // Throttle de 2 minutos
-    const waitSeconds = checkAndSetUserThrottle(userId);
-    if (waitSeconds > 0) {
-      return res.status(429).json({ 
-        error: `Por favor, aguarde ${waitSeconds} segundos para enviar outra pergunta.` 
-      });
-    }
-
     console.log(`[CHAT IA] Nova pergunta recebida: "${question}"`);
 
     if (!question || !question.trim()) {
@@ -293,20 +265,37 @@ export const askFinancialAi = async (req, res) => {
       .map(([cat, val]) => `- ${cat}: R$ ${val.toFixed(2)}`)
       .join('\n') || 'Nenhuma entrada categorizada.';
 
+    const stringMetas = (summary.metas || [])
+      .map(m => `- ${m.nome}: Alvo R$ ${m.objetivo}, Saldo Atual R$ ${m.saldoAtual} (Falta R$ ${m.restante}, Progresso ${m.progresso}%)`)
+      .join('\n') || 'Nenhuma meta/caixinha ativa.';
+
+    const stringInvestimentos = (summary.detalhes?.nomesInvestimentos || []).join('\n') || 'Nenhum investimento registrado.';
+    const stringWishlist = (summary.detalhes?.itensWishlist || []).join('\n') || 'Lista de desejos vazia.';
+
     const messages = [
       {
         role: 'system',
-        content: `Você é o Mentor Financeiro Exclusivo do ecossistema FinanceMax. Responda de forma concisa e exata, formatando valores financeiros em Markdown.`
+        content: `Você é o Mentor Financeiro do FinanceMax. Responda de forma concisa usando Markdown. 
+        Use os dados reais do usuário fornecidos abaixo para cálculos exatos. 
+        Ao falar de 'Caixinhas' ou 'Metas', use o valor do 'Alvo' para cálculos de tempo ou projeções de economia. 
+        Não invente valores; se a informação não estiver nos dados, peça esclarecimento ao usuário.`
       },
       {
         role: 'user',
-        content: `MÉTRICAS: Receitas R$ ${summary.balanco.receitas}, Gastos R$ ${summary.balanco.gastosTotal}, Saldo R$ ${summary.balanco.saldoLivre}\n\nPergunta: ${question}\n\nDespesas por categoria:\n${stringGastosCat}`
+        content: `DADOS DA CONTA DO USUÁRIO:
+        - Fluxo de Caixa: Receitas R$ ${summary.balanco.receitas}, Saídas R$ ${summary.balanco.gastosTotal}, Saldo R$ ${summary.balanco.saldoLivre}
+        - Metas (Caixinhas):\n${stringMetas}
+        - Investimentos:\n${stringInvestimentos}
+        - Lista de Desejos:\n${stringWishlist}
+        - Gastos por Categoria:\n${stringGastosCat}
+
+        Pergunta: "${question}"`
       }
     ];
 
     try {
       const completion = await callModel(messages, { 
-        model: 'llama-3.3-70b-versatile', 
+        model: 'llama-3.1-8b-instant', 
         temperature: 0.15 
       });
       console.log('[CHAT IA] Completion raw response:', JSON.stringify(completion, null, 2));
@@ -318,10 +307,26 @@ export const askFinancialAi = async (req, res) => {
       const status = err?.status || err?.response?.status;
       const retryAfterChat = extractRetryAfter(err);
       if (status === 429 || status === 503 || err?.error?.error?.code === 'rate_limit_exceeded') {
-        console.warn('[CHAT IA] Rate limit detected — returning fallback answer. Retry-After:', retryAfterChat);
+        console.warn('[CHAT IA] Limite atingido — Gerando Resumo de Contingência Completo.');
+        
         const topCat = Object.entries(summary.detalhes.gastosPorCategoria || {}).sort((a,b) => b[1]-a[1])[0];
-        const topCatText = topCat ? `${topCat[0]} (R$ ${Number(topCat[1]).toFixed(2)})` : 'nenhuma categoria relevante';
-        const fallbackAnswer = `Fallback IA: com base nas últimas ${summary.volumeTransacoes} transações, seu saldo livre é R$ ${summary.balanco.saldoLivre}. Maior gasto: ${topCatText}. Recomendação inicial: reveja despesas em ${topCatText}.`;
+        const topCatText = topCat ? `${topCat[0]} (R$ ${Number(topCat[1]).toFixed(2)})` : 'N/A';
+        
+        const invSnippet = summary.detalhes.nomesInvestimentos?.length > 0 ? summary.detalhes.nomesInvestimentos.slice(0, 2).join(', ') : 'Sem ativos';
+        const goalSnippet = summary.metas?.length > 0 ? summary.metas.slice(0, 2).map(m => `${m.nome} (${m.progresso}%)`).join(', ') : 'Sem metas';
+        const wishSnippet = summary.detalhes.itensWishlist?.length > 0 ? summary.detalhes.itensWishlist[0] : 'Vazia';
+
+        const fallbackAnswer = `**[MODO DE SEGURANÇA]** Compreendo sua pergunta, mas a IA está temporariamente offline devido ao volume de tráfego. No entanto, aqui está um resumo em tempo real dos seus dados:
+
+• **Saldo Livre:** R$ ${summary.balanco.saldoLivre} (Entradas: R$ ${summary.balanco.receitas} | Saídas: R$ ${summary.balanco.gastosTotal})
+• **Foco de Gastos:** Sua maior categoria é **${topCatText}**.
+• **Custos Fixos:** Você tem R$ ${summary.balanco.custosFixos} comprometidos em recorrências mensais.
+• **Patrimônio:** R$ ${summary.balanco.totalInvestido} investidos (Ex: ${invSnippet}...).
+• **Objetivos:** ${goalSnippet}.
+• **Lista de Desejos:** ${summary.wishlistCount} itens pendentes (Ex: ${wishSnippet}).
+
+*Tente refazer sua pergunta específica em alguns instantes.*`;
+
         return res.status(200).json({ answer: fallbackAnswer, fallback: true, retryAfterSeconds: retryAfterChat });
       }
       throw err;
@@ -397,7 +402,7 @@ export const analyzeStrategyStructure = async (req, res) => {
         { role: 'user', content: `${prompt}\nEstrutura: ${JSON.stringify(simplified).slice(0,2000)}` }
       ];
       const completion = await callModel(messages, {
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant',
         response_format: { type: 'json_object' },
         temperature: 0.1
       });

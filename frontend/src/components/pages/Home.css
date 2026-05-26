@@ -1,0 +1,262 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&display=swap');
+
+/* Variables for Home Page - Professional Theme */
+:root {
+  --radius: 1rem;
+  --background: oklch(0.985 0.005 220);
+  --foreground: oklch(0.18 0.04 250);
+  --ink: oklch(0.14 0.05 255);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.04 250);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.04 250);
+  --primary: oklch(0.78 0.16 215);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.96 0.01 230);
+  --secondary-foreground: oklch(0.18 0.04 250);
+  --muted: oklch(0.96 0.01 230);
+  --muted-foreground: oklch(0.5 0.03 250);
+  --accent: oklch(0.78 0.16 215);
+  --accent-foreground: oklch(1 0 0);
+  --destructive: oklch(0.62 0.22 25);
+  --destructive-foreground: oklch(1 0 0);
+  --success: oklch(0.7 0.18 155);
+  --border: oklch(0.92 0.01 240);
+  --input: oklch(0.92 0.01 240);
+  --ring: oklch(0.78 0.16 215);
+
+  --gradient-brand: linear-gradient(135deg, oklch(0.82 0.16 215), oklch(0.55 0.18 255));
+  --gradient-hero: radial-gradient(ellipse at top right, oklch(0.85 0.15 215 / 0.35), transparent 60%),
+                   radial-gradient(ellipse at bottom left, oklch(0.55 0.18 255 / 0.18), transparent 55%);
+  --shadow-card: 0 20px 50px -25px oklch(0.55 0.18 255 / 0.25);
+  --shadow-glow: 0 0 60px oklch(0.78 0.16 215 / 0.45);
+}
+
+/* Home Container - Override body styles only for home */
+.home-page-container {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.home-page-container h1,
+.home-page-container h2,
+.home-page-container h3,
+.home-page-container h4 {
+  font-family: "Montserrat", system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Utility Classes */
+.home-page-container .text-gradient {
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.home-page-container .bg-hero {
+  background-image: var(--gradient-hero);
+}
+
+.home-page-container .bg-brand {
+  background: var(--gradient-brand);
+}
+
+.home-page-container .shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
+.home-page-container .shadow-glow {
+  box-shadow: var(--shadow-glow);
+}
+
+.home-page-container .italic-display {
+  font-style: italic;
+  font-weight: 900;
+}
+
+/* Color Variables for Tailwind Classes */
+.home-page-container {
+  --tw-bg-opacity: 1;
+  --tw-text-opacity: 1;
+}
+
+.home-page-container .bg-background {
+  background-color: oklch(0.985 0.005 220);
+}
+
+.home-page-container .bg-card {
+  background-color: oklch(1 0 0);
+}
+
+.home-page-container .bg-muted {
+  background-color: oklch(0.96 0.01 230);
+}
+
+.home-page-container .text-foreground {
+  color: oklch(0.18 0.04 250);
+}
+
+.home-page-container .text-muted-foreground {
+  color: oklch(0.5 0.03 250);
+}
+
+.home-page-container .text-primary {
+  color: oklch(0.78 0.16 215);
+}
+
+.home-page-container .text-destructive {
+  color: oklch(0.62 0.22 25);
+}
+
+.home-page-container .text-success {
+  color: oklch(0.7 0.18 155);
+}
+
+.home-page-container .border-border {
+  border-color: oklch(0.92 0.01 240);
+}
+
+/* Background Colors with Opacity */
+.home-page-container .bg-primary\\/10 {
+  background-color: oklch(0.78 0.16 215 / 0.1);
+}
+
+.home-page-container .bg-primary\\/15 {
+  background-color: oklch(0.78 0.16 215 / 0.15);
+}
+
+.home-page-container .bg-success\\/10 {
+  background-color: oklch(0.7 0.18 155 / 0.1);
+}
+
+.home-page-container .bg-success\\/15 {
+  background-color: oklch(0.7 0.18 155 / 0.15);
+}
+
+.home-page-container .bg-destructive\\/10 {
+  background-color: oklch(0.62 0.22 25 / 0.1);
+}
+
+.home-page-container .bg-card\\/40 {
+  background-color: oklch(1 0 0 / 0.4);
+}
+
+.home-page-container .bg-card\\/50 {
+  background-color: oklch(1 0 0 / 0.5);
+}
+
+.home-page-container .bg-muted\\/30 {
+  background-color: oklch(0.96 0.01 230 / 0.3);
+}
+
+.home-page-container .bg-muted\\/50 {
+  background-color: oklch(0.96 0.01 230 / 0.5);
+}
+
+.home-page-container .bg-foreground\\/10 {
+  background-color: oklch(0.18 0.04 250 / 0.1);
+}
+
+.home-page-container .bg-foreground\\/15 {
+  background-color: oklch(0.18 0.04 250 / 0.15);
+}
+
+/* Border Colors with Opacity */
+.home-page-container .border-border {
+  border-color: oklch(0.92 0.01 240);
+}
+
+.home-page-container .border-primary\\/20 {
+  border-color: oklch(0.78 0.16 215 / 0.2);
+}
+
+.home-page-container .border-destructive\\/30 {
+  border-color: oklch(0.62 0.22 25 / 0.3);
+}
+
+.home-page-container .border-success\\/30 {
+  border-color: oklch(0.7 0.18 155 / 0.3);
+}
+
+.home-page-container .border-primary\\/30 {
+  border-color: oklch(0.78 0.16 215 / 0.3);
+}
+
+.home-page-container .border-foreground\\/10 {
+  border-color: oklch(0.18 0.04 250 / 0.1);
+}
+
+.home-page-container .border-foreground\\/15 {
+  border-color: oklch(0.18 0.04 250 / 0.15);
+}
+
+/* Animations */
+@keyframes float-up {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+@keyframes bar-grow {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 oklch(0.78 0.16 215 / 0.5); }
+  100% { box-shadow: 0 0 0 20px oklch(0.78 0.16 215 / 0); }
+}
+
+.home-page-container .animate-float {
+  animation: float-up 6s ease-in-out infinite;
+}
+
+.home-page-container .animate-bar {
+  transform-origin: bottom;
+  animation: bar-grow 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.home-page-container .animate-fade-up {
+  animation: fade-up 0.8s ease-out forwards;
+}
+
+.home-page-container .animate-pulse-ring {
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+/* Gradient Backgrounds for Feature Icons */
+.home-page-container .from-\[oklch\(0\.78_0\.16_215\)\]\.to-\[oklch\(0\.55_0\.18_255\)\] {
+  background: linear-gradient(to right, oklch(0.78 0.16 215), oklch(0.55 0.18 255));
+}
+
+.home-page-container .from-\[oklch\(0\.7_0\.18_155\)\]\.to-\[oklch\(0\.78_0\.16_215\)\] {
+  background: linear-gradient(to right, oklch(0.7 0.18 155), oklch(0.78 0.16 215));
+}
+
+.home-page-container .from-\[oklch\(0\.65_0\.2_300\)\]\.to-\[oklch\(0\.55_0\.18_255\)\] {
+  background: linear-gradient(to right, oklch(0.65 0.2 300), oklch(0.55 0.18 255));
+}
+
+.home-page-container .from-\[oklch\(0\.55_0\.18_255\)\]\.to-\[oklch\(0\.65_0\.2_300\)\] {
+  background: linear-gradient(to right, oklch(0.55 0.18 255), oklch(0.65 0.2 300));
+}
+
+.home-page-container .from-\[oklch\(0\.78_0\.16_215\)\]\.to-\[oklch\(0\.62_0\.22_25\)\] {
+  background: linear-gradient(to right, oklch(0.78 0.16 215), oklch(0.62 0.22 25));
+}
+
+/* Special text color for income */
+.home-page-container .text-\[oklch\(0\.55_0\.18_155\)\] {
+  color: oklch(0.55 0.18 155);
+}
+
+.home-page-container .text-\[oklch\(0\.45_0\.15_155\)\] {
+  color: oklch(0.45 0.15 155);
+}

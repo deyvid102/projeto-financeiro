@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 // Páginas
 import UserLogin from './components/pages/login/UserLogin';
 import UserRegister from './components/pages/login/UserRegister';
+import Home from './components/pages/Home';
 import DashPanel from './components/pages/panel/DashPanel';
 import TransactionsPanel from './components/pages/panel/TransactionsPanel';
 import ExpensesPanel from './components/pages/panel/ExpensesPanel';
@@ -67,8 +68,8 @@ function App() {
             </PrivateRoute>
           } />
 
-          {/* Redirecionamento Inicial */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          {/* Página Inicial (marketing) */}
+          <Route path="/" element={<Home />} />
 
           {/* Tela 404 Customizada */}
           <Route path="*" element={

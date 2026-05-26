@@ -174,6 +174,9 @@ const UserRegister = () => {
               Fazer Login
             </Link>
           </p>
+          <p className="mt-2 text-center text-[10px] font-bold text-text-secondary">
+            <Link to="/" className="hover:underline">Voltar para Home</Link>
+          </p>
         </div>
       </div>
 

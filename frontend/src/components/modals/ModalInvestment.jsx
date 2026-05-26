@@ -18,6 +18,7 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
     type: 'renda fixa',
     ticker: '', 
     amountInvested: '',
+    quantity: '',
     expectedProfitability: '',
     startDate: new Date().toISOString().split('T')[0], 
     endDate: '',
@@ -56,11 +57,20 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
     fetchPrice(formData.ticker, formData.type);
   }, [formData.ticker, formData.type, fetchPrice]);
 
-  // --- CÁLCULO DE QUANTIDADE ESTIMADA ---
+  // --- CÁLCULO DO VALOR TOTAL PARA AÇÕES ---
+  const calculatedAmount = useMemo(() => {
+    if (formData.type !== 'acoes' || !marketPrice || !formData.quantity) return '';
+    const quantity = parseFloat(formData.quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) return '';
+    return (quantity * marketPrice).toFixed(2);
+  }, [marketPrice, formData.quantity, formData.type]);
+
   const estimatedQuantity = useMemo(() => {
-    if (!marketPrice || !formData.amountInvested || isFixedIncome) return null;
-    return (parseFloat(formData.amountInvested) / marketPrice).toFixed(8);
-  }, [marketPrice, formData.amountInvested, isFixedIncome]);
+    if (!marketPrice || !formData.amountInvested || isFixedIncome || formData.type === 'acoes') return '';
+    const quantity = parseFloat(formData.amountInvested) / marketPrice;
+    if (!Number.isFinite(quantity) || quantity <= 0) return '';
+    return quantity.toFixed(8).replace(/\.0+$/, '').replace(/(\.\d+?)0+$/, '$1');
+  }, [marketPrice, formData.amountInvested, isFixedIncome, formData.type]);
 
   // --- LÓGICA DE SIMULAÇÃO (RENDA FIXA) ---
   const simulation = useMemo(() => {
@@ -117,14 +127,30 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
     setLoading(true);
 
     try {
+      if (formData.type === 'acoes') {
+        const quantityNumber = parseFloat(formData.quantity);
+        if (!quantityNumber || quantityNumber <= 0) {
+          showAlert('Informe a quantidade de ações', 'error');
+          setLoading(false);
+          return;
+        }
+        if (!marketPrice) {
+          showAlert('Cotação não disponível para calcular o valor da ação', 'error');
+          setLoading(false);
+          return;
+        }
+      }
+
       const selectedStartDate = new Date(formData.startDate);
       selectedStartDate.setMinutes(selectedStartDate.getMinutes() + selectedStartDate.getTimezoneOffset());
 
       const dataToSend = {
         ...formData,
         ticker: isFixedIncome ? '' : formData.ticker.toUpperCase(),
-        amountInvested: Number(formData.amountInvested),
-        quantity: 0, // Backend calcula via MarketPrice se for 0
+        amountInvested: formData.type === 'acoes'
+          ? Number(parseFloat(formData.quantity) * marketPrice)
+          : Number(formData.amountInvested),
+        quantity: formData.type === 'acoes' ? Number(formData.quantity) : Number(formData.quantity) || 0,
         startDate: selectedStartDate,
         expectedProfitability: showVencimento ? Number(formData.expectedProfitability) : 0,
         endDate: showVencimento ? formData.endDate : null,
@@ -215,26 +241,50 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
             )}
           </div>
 
-          {/* Valor e Quantidade Estimada */}
-          <div className="space-y-2 text-left">
-            <div className="flex justify-between items-center px-2">
-              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary">Total Investido (Aporte)</label>
-              {estimatedQuantity > 0 && (
-                <span className="text-[9px] font-black text-brand italic animate-in fade-in slide-in-from-right-2">
-                  ≈ {estimatedQuantity} un.
+          {formData.type === 'acoes' ? (
+            <div className="space-y-4 text-left">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary">Quantidade</label>
+                <input
+                  required
+                  type="number"
+                  step="0.00000001"
+                  min="0"
+                  value={formData.quantity}
+                  className="w-full bg-bg-main border border-border-ui rounded-2xl py-4 px-4 text-sm font-black italic outline-none focus:border-brand transition-all text-text-primary shadow-inner"
+                  onChange={(e) => setFormData({...formData, quantity: e.target.value})}
+                  placeholder="0,00000000"
+                />
+              </div>
+
+              <div className="bg-bg-main/50 border border-border-ui/50 rounded-2xl p-3 flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary">Valor Total Estimado</span>
+                <span className="text-[13px] font-black text-text-primary">
+                  {calculatedAmount ? `R$ ${Number(calculatedAmount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00'}
                 </span>
-              )}
+              </div>
             </div>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-brand italic">R$</span>
-              <input 
-                required type="number" step="0.01" value={formData.amountInvested}
-                className="w-full bg-bg-main border border-border-ui rounded-2xl py-4 pl-10 pr-4 text-sm font-black italic outline-none focus:border-brand transition-all text-text-primary shadow-inner"
-                onChange={(e) => setFormData({...formData, amountInvested: e.target.value})}
-                placeholder="0,00"
-              />
+          ) : (
+            <div className="space-y-2 text-left">
+              <div className="flex justify-between items-center px-2">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-text-secondary">Total Investido (Aporte)</label>
+                {estimatedQuantity > 0 && (
+                  <span className="text-[9px] font-black text-brand italic animate-in fade-in slide-in-from-right-2">
+                    ≈ {estimatedQuantity} un.
+                  </span>
+                )}
+              </div>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-brand italic">R$</span>
+                <input 
+                  required type="number" step="0.01" value={formData.amountInvested}
+                  className="w-full bg-bg-main border border-border-ui rounded-2xl py-4 pl-10 pr-4 text-sm font-black italic outline-none focus:border-brand transition-all text-text-primary shadow-inner"
+                  onChange={(e) => setFormData({...formData, amountInvested: e.target.value})}
+                  placeholder="0,00"
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Cotação Atual (Preview) */}
           {marketPrice && isVariableIncome && (

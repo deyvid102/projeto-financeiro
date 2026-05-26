@@ -1,68 +1,8 @@
+import { syncMarketPrices } from '../services/MarketService.js';
 import ModelInvestment from '../models/ModelInvestment.js';
 import Transaction from '../models/ModelTransaction.js';
 import MarketPrice from '../models/ModelMarketPrice.js';
 import axios from 'axios';
-
-// --- FUNÇÃO AUXILIAR DE SINCRONIZAÇÃO (CACHE CENTRALIZADO) ---
-// Esta função é interna e lida com a lógica de bater nas APIs e salvar no banco
-const syncMarketPrices = async (tickers, investments) => {
-  const now = new Date();
-  const CACHE_TIME = 30 * 60 * 1000; // 30 minutos
-
-  const existingPrices = await MarketPrice.find({ ticker: { $in: tickers } });
-  
-  const tickersToUpdate = tickers.filter(t => {
-    const found = existingPrices.find(p => p.ticker === t);
-    return !found || (now - new Date(found.lastUpdate)) > CACHE_TIME;
-  });
-
-  if (tickersToUpdate.length > 0) {
-    try {
-      const pricesMap = {};
-      
-      const cryptoTickers = tickersToUpdate.filter(t => 
-        investments.find(inv => inv.ticker === t && inv.type?.toLowerCase() === 'criptomoedas')
-      );
-      const stockTickers = tickersToUpdate.filter(t => !cryptoTickers.includes(t));
-
-      // BATCH CRIPTO (CoinGecko)
-      if (cryptoTickers.length > 0) {
-        const ids = cryptoTickers.map(t => {
-          const lower = t.toLowerCase();
-          return lower === 'btc' ? 'bitcoin' : lower === 'eth' ? 'ethereum' : lower;
-        }).join(',');
-        
-        const { data } = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=brl`);
-        
-        Object.keys(data).forEach(id => {
-          const tickerOriginal = id === 'bitcoin' ? 'BTC' : id === 'ethereum' ? 'ETH' : id.toUpperCase();
-          pricesMap[tickerOriginal] = data[id].brl;
-        });
-      }
-
-      // BATCH AÇÕES/FIIS (Brapi)
-      if (stockTickers.length > 0) {
-        const tickersString = stockTickers.join(',');
-        const { data } = await axios.get(`https://brapi.dev/api/quote/${tickersString}`);
-        data.results?.forEach(res => { 
-          pricesMap[res.symbol.toUpperCase()] = res.regularMarketPrice; 
-        });
-      }
-
-      const updatePromises = Object.keys(pricesMap).map(ticker => 
-        MarketPrice.findOneAndUpdate(
-          { ticker },
-          { price: pricesMap[ticker], lastUpdate: now },
-          { upsert: true, new: true }
-        )
-      );
-      
-      await Promise.all(updatePromises);
-    } catch (err) {
-      console.error("Erro ao sincronizar preços de mercado:", err.message);
-    }
-  }
-};
 
 // --- CONTROLLERS ---
 

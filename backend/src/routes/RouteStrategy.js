@@ -13,10 +13,11 @@ import {
   removeChildCard
 } from '../controllers/ControlStrategy.js';
 import { protect } from '../middleware/AuthMiddleware.js';
+import { attachSubscription, enforceMinimumPlan } from '../middleware/SubscriptionMiddleware.js';
 
 const router = express.Router();
 
-router.use(protect);
+router.use(protect, attachSubscription, enforceMinimumPlan('PRO'));
 
 router.route('/categories')
   .post(createStrategyCategory)

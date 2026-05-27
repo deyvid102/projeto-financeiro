@@ -3,6 +3,7 @@ import ModelInvestment from '../models/ModelInvestment.js';
 import Transaction from '../models/ModelTransaction.js';
 import MarketPrice from '../models/ModelMarketPrice.js';
 import axios from 'axios';
+import { isPlanAtLeast } from '../services/planService.js';
 
 // --- CONTROLLERS ---
 
@@ -11,10 +12,15 @@ export const getTickerPrice = async (req, res) => {
   try {
     const { ticker, type } = req.query;
     if (!ticker) return res.status(400).json({ message: "Ticker é obrigatório" });
-    
+
+    const userPlan = req.subscription?.plan || 'STARTER';
+    if (!isPlanAtLeast(userPlan, 'PRO')) {
+      return res.status(403).json({ message: 'Acesso negado. Cotação em tempo real exige o plano PRO.' });
+    }
+
     const tickerUpper = ticker.toUpperCase();
     await syncMarketPrices([tickerUpper], [{ ticker: tickerUpper, type }]);
-    
+
     const priceData = await MarketPrice.findOne({ ticker: tickerUpper });
     res.json({ price: priceData?.price || 0 });
   } catch (error) {
@@ -32,8 +38,9 @@ export const createInvestment = async (req, res) => {
     const investmentAmount = Number(amountInvested);
     let investmentQuantity = Number(quantity);
     const tickerUpper = ticker?.toUpperCase();
+    const isPro = isPlanAtLeast(req.subscription?.plan, 'PRO');
 
-    if ((!investmentQuantity || investmentQuantity <= 0) && tickerUpper) {
+    if ((!investmentQuantity || investmentQuantity <= 0) && tickerUpper && isPro) {
       try {
         await syncMarketPrices([tickerUpper], [{ ticker: tickerUpper, type }]);
         const priceData = await MarketPrice.findOne({ ticker: tickerUpper });
@@ -84,17 +91,18 @@ export const getInvestments = async (req, res) => {
     const allInvestments = await ModelInvestment.find({ user: req.user.id }).sort({ startDate: -1 });
     const activeOnes = allInvestments.filter(inv => inv.status === 'em andamento');
     const finishedOnes = allInvestments.filter(inv => inv.status !== 'em andamento');
+    const isPro = isPlanAtLeast(req.subscription?.plan, 'PRO');
 
     const tickers = [...new Set(activeOnes
       .filter(inv => ['acoes', 'fiis', 'criptomoedas'].includes(inv.type?.toLowerCase()))
       .map(inv => inv.ticker)
     )].filter(Boolean);
 
-    if (tickers.length > 0) {
+    if (isPro && tickers.length > 0) {
       await syncMarketPrices(tickers, activeOnes);
     }
 
-    const marketPrices = await MarketPrice.find({ ticker: { $in: tickers } });
+    const marketPrices = await MarketPrice.find({ ticker: { $in: isPro ? tickers : [] } });
     const priceMap = {};
     marketPrices.forEach(p => { priceMap[p.ticker] = p.price; });
 
@@ -162,9 +170,11 @@ export const liquidateInvestment = async (req, res) => {
       const now = new Date();
 
       if (['acoes', 'fiis', 'criptomoedas'].includes(type) && investment.ticker) {
-        await syncMarketPrices([investment.ticker], [investment]);
-        const marketData = await MarketPrice.findOne({ ticker: investment.ticker });
-        if (marketData && marketData.price) currentUnitValue = marketData.price;
+        if (isPlanAtLeast(req.subscription?.plan, 'PRO')) {
+          await syncMarketPrices([investment.ticker], [investment]);
+          const marketData = await MarketPrice.findOne({ ticker: investment.ticker });
+          if (marketData && marketData.price) currentUnitValue = marketData.price;
+        }
       } else if (type === 'renda fixa' && investment.startDate && investment.endDate) {
         const start = new Date(investment.startDate);
         const end = new Date(investment.endDate);

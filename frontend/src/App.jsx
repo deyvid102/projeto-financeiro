@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { isPlanAtLeast, getStoredPlan } from './utils/planUtils';
 
 // Páginas
 import UserLogin from './components/pages/login/UserLogin';
@@ -20,6 +21,11 @@ import './index.css';
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem('token');
   return token ? children : <Navigate to="/login" replace />;
+};
+
+const PlanRoute = ({ children, requiredPlan }) => {
+  const userPlan = getStoredPlan();
+  return isPlanAtLeast(userPlan, requiredPlan) ? children : <Navigate to="/dashboard" replace />;
 };
 
 function App() {
@@ -52,7 +58,9 @@ function App() {
 
           <Route path="/investments" element={
             <PrivateRoute>
-              <MainLayout><InvestmentPanel /></MainLayout>
+              <PlanRoute requiredPlan="PRO">
+                <MainLayout><InvestmentPanel /></MainLayout>
+              </PlanRoute>
             </PrivateRoute>
           } />
 
@@ -64,7 +72,9 @@ function App() {
 
           <Route path="/strategy" element={
             <PrivateRoute>
-              <MainLayout><StrategyPanel /></MainLayout>
+              <PlanRoute requiredPlan="PRO">
+                <MainLayout><StrategyPanel /></MainLayout>
+              </PlanRoute>
             </PrivateRoute>
           } />
 

@@ -361,9 +361,9 @@ function Testimonials() {
 
 function Pricing() {
   const plans = [
-    { n: 'FREE', p: 'R$ 0', d: 'Para começar', f: ['Dashboard básico', 'Até 50 transações/mês', '1 caixinha', 'Suporte por e-mail'], h: false },
-    { n: 'PRO', p: 'R$ 19', d: 'Mais popular', f: ['Tudo do Free', 'Transações ilimitadas', 'Auditor IA completo', 'Gestão de patrimônio', 'UML Strategy', 'Sugestões personalizadas'], h: true },
-    { n: 'MAX', p: 'R$ 49', d: 'Para investidores', f: ['Tudo do Pro', 'API de cotações em tempo real', 'Relatórios avançados', 'Consultor dedicado', 'Acesso antecipado a features'], h: false },
+    { n: 'STARTER', p: 'R$ 0', d: 'Para começar', f: ['Dashboard simplificado', 'Até 50 transações/mês', '3 caixinhas', 'Suporte por e-mail'], h: false },
+    { n: 'PRO', p: 'R$ 29,90', d: 'Mais popular', f: ['Tudo do Starter', 'Transações ilimitadas', 'Gráficos de gastos', 'Alocação de ativos', 'Relatório IA (5 min)', 'Cotações em tempo real', 'Gestão de patrimônio', 'UML Strategy'], h: true },
+    { n: 'MAX', p: 'R$ 59.9', d: 'Para investidores', f: ['Tudo do Pro', 'Auditor IA (Chat)', 'IA Instantânea', 'Relatórios avançados', 'Consultor dedicado', 'Acesso antecipado'], h: false },
   ];
   return (
     <section id="planos" className="py-24">

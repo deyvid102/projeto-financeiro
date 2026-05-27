@@ -1,18 +1,13 @@
 import React from 'react';
-import { LayoutDashboard, ReceiptText, TrendingUp, WalletMinimal, Target, Compass } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { navItems } from '../navItems';
+import { getStoredPlan, isPlanAtLeast } from '../../../utils/planUtils';
 // Importação da logo
 import logoImg from '../../../assets/logo.png'; 
 
 const Sidebar = () => {
-  const menuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-    { icon: ReceiptText, label: 'Transações', path: '/transactions' },
-    { icon: WalletMinimal, label: 'Despesas', path: '/expenses' },
-    { icon: TrendingUp, label: 'Investimentos', path: '/investments' },
-    { icon: Target, label: 'Caixinhas', path: '/goals' },
-    { icon: Compass, label: 'Estratégia', path: '/strategy' },
-  ];
+  const userPlan = getStoredPlan();
+  const menuItems = navItems.filter((item) => isPlanAtLeast(userPlan, item.minPlan));
 
   return (
     <aside className="hidden md:flex w-20 h-screen sticky top-0 bg-bg-sidebar border-r border-border-ui flex-col items-center py-8 transition-all duration-300 ease-in-out z-50">

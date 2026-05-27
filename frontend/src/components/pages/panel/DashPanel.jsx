@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Wallet, ArrowUpCircle, ArrowDownCircle, 
-  Calendar, TrendingUp, PieChart as PieIcon, BarChart3, CreditCard
+  Wallet, ArrowUpCircle, ArrowDownCircle, Lock,
+  Calendar, TrendingUp, PieChart as PieIcon, BarChart3, CreditCard,
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -9,6 +9,7 @@ import {
 } from 'recharts';
 import api from '@/services/api';
 import LoadingState from '@/components/LoadingState'; 
+import { getStoredPlan, isPlanAtLeast } from '../../../utils/planUtils';
 
 // Tooltip Personalizada
 const CustomTooltip = ({ active, payload, label }) => {
@@ -40,9 +41,11 @@ const CustomTooltip = ({ active, payload, label }) => {
 const DashPanel = () => {
   const [transactions, setTransactions] = useState([]);
   const [investments, setInvestments] = useState([]);
-  const [summary, setSummary] = useState({ balance: 0, income: 0, expense: 0, totalProfit: 0 });
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const userPlan = getStoredPlan();
+  const hasProAccess = isPlanAtLeast(userPlan, 'PRO');
   const [timeFilter, setTimeFilter] = useState('anual');
 
   useEffect(() => {
@@ -60,18 +63,6 @@ const DashPanel = () => {
         setTransactions([...transData].sort((a, b) => new Date(b.date) - new Date(a.date)));
         setInvestments(invData);
         setCards(cardsData);
-        
-        // Fluxo de caixa
-        const income = transData.filter(t => t.type === 'entrada').reduce((acc, curr) => acc + Number(curr.amount), 0);
-        const expense = transData.filter(t => t.type === 'saida').reduce((acc, curr) => acc + Number(curr.amount), 0);
-        
-        // Lucro baseado APENAS em investimentos "em andamento" usando o valor da API
-        const ativos = invData.filter(inv => inv.status === 'em andamento');
-        const totalInvestido = ativos.reduce((acc, inv) => acc + (Number(inv.amountInvested) || 0), 0);
-        const totalAtual = ativos.reduce((acc, inv) => acc + (Number(inv.currentTotalValue) || 0), 0);
-        const profit = totalAtual - totalInvestido;
-
-        setSummary({ income, expense, balance: income - expense, totalProfit: profit });
       } catch (err) {
         console.error("Erro ao carregar:", err);
       } finally {
@@ -112,14 +103,62 @@ const DashPanel = () => {
     return Object.values(dataMap).sort((a, b) => a.rawDate - b.rawDate);
   }, [transactions, timeFilter]);
 
+  // Cálculos dinâmicos e reativos para o topo do Dashboard
+  const summary = useMemo(() => {
+    // Saldo Total (Histórico)
+    const totalIn = transactions.filter(t => t.type === 'entrada').reduce((acc, t) => acc + Number(t.amount || 0), 0);
+    const totalOut = transactions.filter(t => t.type === 'saida').reduce((acc, t) => acc + Number(t.amount || 0), 0);
+
+    // Receitas e Despesas do Período (Sincronizado com o filtro de tempo selecionado)
+    const periodIn = timeChartsData.reduce((acc, curr) => acc + curr.entradas, 0);
+    const periodOut = timeChartsData.reduce((acc, curr) => acc + curr.saidas, 0);
+
+    // Lucro de Investimentos (Apenas ativos em andamento)
+    const ativos = investments.filter(inv => inv.status === 'em andamento');
+    const totalInvestido = ativos.reduce((acc, inv) => acc + (Number(inv.amountInvested) || 0), 0);
+    const totalAtual = ativos.reduce((acc, inv) => acc + (Number(inv.currentTotalValue) || 0), 0);
+
+    return {
+      balance: periodIn - periodOut, // Agora o saldo reflete o período selecionado
+      income: periodIn,
+      expense: periodOut,
+      totalProfit: totalAtual - totalInvestido
+    };
+  }, [transactions, investments, timeChartsData]);
+
+  // Transações filtradas pelo período selecionado para uso em outros gráficos
+  const periodFilteredTransactions = useMemo(() => {
+    const now = new Date();
+    let startDate, endDate;
+
+    if (timeFilter === 'semanal') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+      endDate = now;
+    } else if (timeFilter === 'mensal') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    } else { // anual
+      startDate = new Date(now.getFullYear(), 0, 1);
+      endDate = new Date(now.getFullYear(), 11, 31);
+    }
+
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+
+    return transactions.filter(t => {
+      const tDate = new Date(t.date);
+      return tDate >= startDate && tDate <= endDate;
+    });
+  }, [transactions, timeFilter]);
+
   const categoryData = useMemo(() => {
     const categories = {};
-    transactions.filter(t => t.type === 'saida').forEach(t => {
+    periodFilteredTransactions.filter(t => t.type === 'saida').forEach(t => {
       const cat = t.category || 'Outros';
       categories[cat] = (categories[cat] || 0) + Number(t.amount);
     });
     return Object.entries(categories).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [transactions]);
+  }, [periodFilteredTransactions]);
 
   // Alocação de ativos SOMENTE para status "em andamento"
   const activeInvestmentsData = useMemo(() => {
@@ -184,8 +223,8 @@ const DashPanel = () => {
               <TrendingUp size={12} className="text-brand opacity-70 md:w-3.5 md:h-3.5" />
               <span className="text-[7px] md:text-[10px] text-text-secondary font-black uppercase tracking-widest opacity-60">Lucro Invest.</span>
             </div>
-            <h2 className="text-base md:text-2xl font-black text-brand italic tracking-tighter truncate">
-              {summary.totalProfit > 0 ? '+' : ''}{summary.totalProfit.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
+            <h2 className={`text-base md:text-2xl font-black italic tracking-tighter truncate ${summary.totalProfit >= 0 ? 'text-brand' : 'text-red-500'}`}>
+              {summary.totalProfit >= 0 ? '+' : ''}{summary.totalProfit.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
             </h2>
           </div>
         </div>
@@ -223,7 +262,7 @@ const DashPanel = () => {
           </div>
         </div>
         
-        {/* GRÁFICO 1: FLUXO DE CAIXA */}
+        {/* GRÁFICO 1: FLUXO DE CAIXA (Visível para todos) */}
         <div className="bg-bg-card border border-border-ui rounded-[2rem] md:rounded-[3rem] p-5 md:p-8 shadow-sm">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
             <h3 className="text-[10px] md:text-sm font-black text-text-primary uppercase tracking-widest italic flex items-center gap-2">
@@ -239,8 +278,8 @@ const DashPanel = () => {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={timeChartsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="cEntrada" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient>
-                  <linearGradient id="cSaida" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/><stop offset="95%" stopColor="#ef4444" stopOpacity={0}/></linearGradient>
+                  <linearGradient id="cEntrada" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0.05}/></linearGradient>
+                  <linearGradient id="cSaida" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/><stop offset="95%" stopColor="#ef4444" stopOpacity={0.05}/></linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.2} />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 8, fill: '#94a3b8', fontWeight: 'bold'}} interval={timeFilter === 'mensal' ? 5 : 0} />
@@ -253,7 +292,7 @@ const DashPanel = () => {
           </div>
         </div>
 
-        {/* GRÁFICO 2: COMPARATIVO */}
+        {/* GRÁFICO 2: COMPARATIVO (Visível para todos) */}
         <div className="bg-bg-card border border-border-ui rounded-[2rem] md:rounded-[3rem] p-5 md:p-8 shadow-sm">
           <h3 className="text-[10px] md:text-sm font-black text-text-primary uppercase tracking-widest italic mb-8 flex items-center gap-2">
             <BarChart3 size={16} className="text-brand" /> Volume Comparativo
@@ -273,65 +312,89 @@ const DashPanel = () => {
           </div>
         </div>
 
-        {/* GRÁFICO 3: CATEGORIAS */}
-        <div className="bg-bg-card border border-border-ui rounded-[2rem] md:rounded-[3rem] p-5 md:p-8 shadow-sm">
-          <h3 className="text-[10px] md:text-sm font-black text-text-primary uppercase tracking-widest italic mb-6 flex items-center gap-2">
-            <PieIcon size={16} className="text-brand" /> Gastos por Categoria
-          </h3>
-          <div className="flex flex-col md:flex-row items-center gap-6">
-            <div className="h-[180px] md:h-[220px] w-full md:w-1/2">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie isAnimationActive={false} data={categoryData} innerRadius={60} outerRadius={80} paddingAngle={8} dataKey="value">
-                    {categoryData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} cornerRadius={10} />)}
-                  </Pie>
-                  <Tooltip content={<CustomTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="w-full md:w-1/2 grid grid-cols-2 gap-2">
-              {categoryData.slice(0, 4).map((e, i) => (
-                <div key={e.name} className="flex items-center gap-2 p-2.5 bg-bg-main/30 rounded-xl border border-border-ui/30">
-                  <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[7px] font-black text-text-secondary uppercase truncate">{e.name}</span>
-                    <span className="text-[9px] font-black text-text-primary italic">{((e.value / (categoryData.reduce((a,b)=>a+b.value,0)||1))*100).toFixed(0)}%</span>
+        {/* GRÁFICO 3: GASTOS POR CATEGORIA (Exclusivo PRO/MAX) */}
+        {hasProAccess ? (
+          <div className="bg-bg-card border border-border-ui rounded-[2rem] md:rounded-[3rem] p-5 md:p-8 shadow-sm">
+            <h3 className="text-[10px] md:text-sm font-black text-text-primary uppercase tracking-widest italic mb-6 flex items-center gap-2">
+              <PieIcon size={16} className="text-brand" /> Gastos por Categoria
+            </h3>
+            <div className="flex flex-col md:flex-row items-center gap-6">
+              <div className="h-[180px] md:h-[220px] w-full md:w-1/2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie isAnimationActive={false} data={categoryData} innerRadius={60} outerRadius={80} paddingAngle={8} dataKey="value">
+                      {categoryData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} cornerRadius={10} />)}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="w-full md:w-1/2 grid grid-cols-2 gap-2">
+                {categoryData.slice(0, 4).map((e, i) => (
+                  <div key={e.name} className="flex items-center gap-2 p-2.5 bg-bg-main/30 rounded-xl border border-border-ui/30">
+                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[7px] font-black text-text-secondary uppercase truncate">{e.name}</span>
+                      <span className="text-[9px] font-black text-text-primary italic">{((e.value / (categoryData.reduce((a,b)=>a+b.value,0)||1))*100).toFixed(0)}%</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="bg-bg-card border border-border-ui rounded-[2rem] md:rounded-[3rem] p-5 md:p-8 shadow-sm flex flex-col items-center justify-center text-center opacity-60">
+            <Lock className="text-brand mb-3" size={24} />
+            <p className="text-[10px] font-black uppercase tracking-widest text-text-primary">
+              Gastos por Categoria
+            </p>
+            <p className="text-[9px] font-bold text-text-secondary uppercase mt-1">
+              Disponível nos planos <span className="text-brand">PRO</span> e <span className="text-brand">MAX</span>
+            </p>
+          </div>
+        )}
 
-        {/* GRÁFICO 4: ALOCAÇÃO */}
-        <div className="bg-bg-card border border-border-ui rounded-[2rem] md:rounded-[3rem] p-5 md:p-8 shadow-sm">
-          <h3 className="text-[10px] md:text-sm font-black text-text-primary uppercase tracking-widest italic mb-6 flex items-center gap-2">
-            <PieIcon size={16} className="text-emerald-500" /> Alocação de Ativos
-          </h3>
-          <div className="flex flex-col md:flex-row items-center gap-6">
-            <div className="h-[180px] md:h-[220px] w-full md:w-1/2">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie isAnimationActive={false} data={activeInvestmentsData} innerRadius={0} outerRadius={80} paddingAngle={2} dataKey="value">
-                    {activeInvestmentsData.map((_, i) => <Cell key={i} fill={COLORS[(i + 2) % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip content={<CustomTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="w-full md:w-1/2 grid grid-cols-2 gap-2">
-              {activeInvestmentsData.slice(0, 4).map((e, i) => (
-                <div key={e.name} className="flex items-center gap-2 p-2.5 bg-bg-main/30 rounded-xl border border-border-ui/30">
-                  <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[(i + 2) % COLORS.length] }} />
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[7px] font-black text-text-secondary uppercase truncate">{e.name}</span>
-                    <span className="text-[9px] font-black text-text-primary italic">{((e.value / (activeInvestmentsData.reduce((a,b)=>a+b.value,0)||1))*100).toFixed(0)}%</span>
+        {/* GRÁFICO 4: ALOCAÇÃO DE ATIVOS (Exclusivo PRO/MAX) */}
+        {hasProAccess ? (
+          <div className="bg-bg-card border border-border-ui rounded-[2rem] md:rounded-[3rem] p-5 md:p-8 shadow-sm">
+            <h3 className="text-[10px] md:text-sm font-black text-text-primary uppercase tracking-widest italic mb-6 flex items-center gap-2">
+              <PieIcon size={16} className="text-emerald-500" /> Alocação de Ativos
+            </h3>
+            <div className="flex flex-col md:flex-row items-center gap-6">
+              <div className="h-[180px] md:h-[220px] w-full md:w-1/2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie isAnimationActive={false} data={activeInvestmentsData} innerRadius={0} outerRadius={80} paddingAngle={2} dataKey="value">
+                      {activeInvestmentsData.map((_, i) => <Cell key={i} fill={COLORS[(i + 2) % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="w-full md:w-1/2 grid grid-cols-2 gap-2">
+                {activeInvestmentsData.slice(0, 4).map((e, i) => (
+                  <div key={e.name} className="flex items-center gap-2 p-2.5 bg-bg-main/30 rounded-xl border border-border-ui/30">
+                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[(i + 2) % COLORS.length]} } />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[7px] font-black text-text-secondary uppercase truncate">{e.name}</span>
+                      <span className="text-[9px] font-black text-text-primary italic">{((e.value / (activeInvestmentsData.reduce((a,b)=>a+b.value,0)||1))*100).toFixed(0)}%</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="bg-bg-card border border-border-ui rounded-[2rem] md:rounded-[3rem] p-5 md:p-8 shadow-sm flex flex-col items-center justify-center text-center opacity-60">
+            <Lock className="text-emerald-500 mb-3" size={24} />
+            <p className="text-[10px] font-black uppercase tracking-widest text-text-primary">
+              Alocação de Ativos
+            </p>
+            <p className="text-[9px] font-bold text-text-secondary uppercase mt-1">
+              Disponível nos planos <span className="text-brand">PRO</span> e <span className="text-brand">MAX</span>
+            </p>
+          </div>
+        )}
       </div>
 
       {/* 3. HISTÓRICO */}

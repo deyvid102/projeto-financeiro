@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAlert } from '../../context/AlertContext';
+import { getStoredPlan, isPlanAtLeast } from '../../utils/planUtils';
 import { debounce } from 'lodash'; // Recomendado instalar: npm install lodash
 
 const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => {
@@ -12,6 +13,8 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
   const [loading, setLoading] = useState(false);
   const [fetchingPrice, setFetchingPrice] = useState(false);
   const [marketPrice, setMarketPrice] = useState(null);
+  const userPlan = getStoredPlan(); // Obtém o plano do usuário
+  const canUseRealTimeQuotes = isPlanAtLeast(userPlan, 'PRO'); // Cotações agora para PRO
 
   const initialState = {
     name: '',
@@ -19,6 +22,7 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
     ticker: '', 
     amountInvested: '',
     quantity: '',
+    unitPrice: '',
     expectedProfitability: '',
     startDate: new Date().toISOString().split('T')[0], 
     endDate: '',
@@ -34,7 +38,7 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
   // --- BUSCA DE PREÇO EM TEMPO REAL (NOVA ROTA) ---
   const fetchPrice = useCallback(
     debounce(async (ticker, type) => {
-      if (!ticker || ticker.length < 2 || !isVariableIncome) {
+      if (!canUseRealTimeQuotes || !ticker || ticker.length < 2 || !isVariableIncome) {
         setMarketPrice(null);
         return;
       }
@@ -50,12 +54,16 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
         setFetchingPrice(false);
       }
     }, 800),
-    [isVariableIncome]
+    [isVariableIncome, canUseRealTimeQuotes]
   );
 
   useEffect(() => {
+    if (!canUseRealTimeQuotes) {
+      setMarketPrice(null);
+      return;
+    }
     fetchPrice(formData.ticker, formData.type);
-  }, [formData.ticker, formData.type, fetchPrice]);
+  }, [formData.ticker, formData.type, fetchPrice, canUseRealTimeQuotes]);
 
   // --- CÁLCULO DO VALOR TOTAL PARA AÇÕES ---
   const calculatedAmount = useMemo(() => {
@@ -147,10 +155,15 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
       const dataToSend = {
         ...formData,
         ticker: isFixedIncome ? '' : formData.ticker.toUpperCase(),
-        amountInvested: formData.type === 'acoes'
-          ? Number(parseFloat(formData.quantity) * marketPrice)
-          : Number(formData.amountInvested),
-        quantity: formData.type === 'acoes' ? Number(formData.quantity) : Number(formData.quantity) || 0,
+        // Lógica para calcular amountInvested e quantity com base no plano e cotação
+        amountInvested: (formData.type === 'acoes' && canUseRealTimeQuotes && marketPrice && parseFloat(formData.quantity) > 0)
+          ? Number(parseFloat(formData.quantity) * marketPrice) // Se for ação, PRO e tiver cotação, calcula pelo quantity
+          : Number(formData.amountInvested), // Caso contrário, usa o valor aportado
+        quantity: (isVariableIncome && canUseRealTimeQuotes && marketPrice && parseFloat(formData.amountInvested) > 0 && (parseFloat(formData.quantity) <= 0 || !formData.quantity))
+          ? Number(parseFloat(formData.amountInvested) / marketPrice) // Se for variável, PRO, tiver cotação e amount, calcula quantity
+          : (formData.type === 'acoes'
+            ? Number(formData.quantity) // Se for ação, usa o quantity informado
+            : Number(formData.quantity) || 0), // Caso contrário, usa quantity ou 0
         startDate: selectedStartDate,
         expectedProfitability: showVencimento ? Number(formData.expectedProfitability) : 0,
         endDate: showVencimento ? formData.endDate : null,
@@ -293,6 +306,11 @@ const ModalInvestment = ({ isOpen, onClose, onRefresh, onTransactionAdded }) => 
               <span className="text-[10px] font-black text-text-primary italic bg-bg-card px-3 py-1 rounded-lg border border-border-ui">
                 {marketPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </span>
+            </div>
+          )}
+          {!marketPrice && !canUseRealTimeQuotes && isVariableIncome && (
+            <div className="bg-yellow-500/10 border border-yellow-300 rounded-2xl p-3 text-[10px] text-yellow-950 font-black uppercase tracking-[0.16em]">
+              Cotação em tempo real é um recurso exclusivo do plano PRO. Para calcular preços automáticos, atualize seu plano.
             </div>
           )}
 

@@ -8,26 +8,27 @@ import {
   getTickerPrice // <--- Importado com sucesso agora
 } from '../controllers/ControlInvestment.js';
 import { protect } from '../middleware/AuthMiddleware.js';
+import { attachSubscription, enforceMinimumPlan } from '../middleware/SubscriptionMiddleware.js';
 
 const router = express.Router();
 
 /**
  * @desc Todas as rotas de investimento exigem autenticação
  */
-router.use(protect); 
+router.use(protect, attachSubscription); 
 
 // --- ROTAS GERAIS E ESTÁTICAS ---
 // Importante: /price deve vir ANTES de /:id para não haver conflito
-router.get('/price', getTickerPrice);
+router.get('/price', enforceMinimumPlan('PRO'), getTickerPrice);
 
 router.route('/')
-  .post(createInvestment)
+  .post(enforceMinimumPlan('PRO'), createInvestment)
   .get(getInvestments);
 
 // --- ROTAS DE ATIVOS ESPECÍFICOS (DINÂMICAS) ---
 router.route('/:id')
-  .put(updateInvestmentValue)
-  .delete(deleteInvestment);
+  .put(enforceMinimumPlan('PRO'), updateInvestmentValue)
+  .delete(enforceMinimumPlan('PRO'), deleteInvestment);
 
 /**
  * @route   PUT /api/investments/:id/liquidate
@@ -35,6 +36,6 @@ router.route('/:id')
  * @access  Private
  * @payload { addAsIncome: boolean, sellPrice: number }
  */
-router.put('/:id/liquidate', liquidateInvestment);
+router.put('/:id/liquidate', enforceMinimumPlan('PRO'), liquidateInvestment);
 
 export default router;

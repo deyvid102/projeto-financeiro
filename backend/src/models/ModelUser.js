@@ -20,6 +20,16 @@ const userSchema = new mongoose.Schema(
       required: [true, 'A senha é obrigatória'],
       minlength: [6, 'A senha deve ter pelo menos 6 caracteres'],
     },
+    lastAiReportAt: {
+      type: Date,
+      default: null,
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    verificationCode: String,
+    verificationCodeExpires: Date,
   },
   {
     timestamps: true, // Cria automaticamente campos createdAt e updatedAt
@@ -42,6 +52,17 @@ userSchema.pre('save', async function (next) {
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
+
+// Virtual populate para assinaturas (subscriptions)
+userSchema.virtual('subscriptions', {
+  ref: 'Subscription',
+  localField: '_id',
+  foreignField: 'user',
+});
+
+// Ajusta toJSON/toObject para incluir virtuais
+userSchema.set('toObject', { virtuals: true });
+userSchema.set('toJSON', { virtuals: true });
 
 const User = mongoose.model('User', userSchema);
 

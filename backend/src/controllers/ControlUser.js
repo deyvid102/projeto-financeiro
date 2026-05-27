@@ -1,5 +1,6 @@
 import ModelUser from '../models/ModelUser.js';
 import jwt from 'jsonwebtoken';
+import { sendVerificationEmail } from '../services/EmailService.js';
 
 // Função auxiliar para gerar o Token JWT
 const generateToken = (id) => {
@@ -14,29 +15,75 @@ export const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: 'Preencha todos os campos.' });
+    }
+
     const userExists = await ModelUser.findOne({ email });
     if (userExists) {
+      // Se o usuário existe mas não está verificado, gera um novo código e reenvia o e-mail
+      if (!userExists.isVerified) {
+        const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+        userExists.verificationCode = newCode;
+        userExists.verificationCodeExpires = Date.now() + 10 * 60 * 1000;
+        await userExists.save();
+        await sendVerificationEmail(email, newCode);
+        return res.status(200).json({ message: 'Código de verificação reenviado ao e-mail.' });
+      }
       return res.status(400).json({ message: 'Usuário já cadastrado com este email.' });
     }
+
+    // Gera código de 6 dígitos
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationCodeExpires = Date.now() + 10 * 60 * 1000; // 10 minutos
 
     const user = await ModelUser.create({
       name,
       email,
       password,
+      verificationCode,
+      verificationCodeExpires,
     });
 
     if (user) {
-      res.status(201).json({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        token: generateToken(user._id),
-      });
+      await sendVerificationEmail(email, verificationCode);
+      res.status(201).json({ message: 'Código enviado ao e-mail.' });
     } else {
       res.status(400).json({ message: 'Dados de usuário inválidos.' });
     }
   } catch (error) {
     res.status(500).json({ message: `Erro no servidor: ${error.message}` });
+  }
+};
+
+// @desc    Verificar e-mail e ativar conta
+// @route   POST /api/users/verify-email
+export const verifyEmail = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    const user = await ModelUser.findOne({ 
+      email, 
+      verificationCode: code,
+      verificationCodeExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Código inválido ou expirado.' });
+    }
+
+    user.isVerified = true;
+    user.verificationCode = undefined;
+    user.verificationCodeExpires = undefined;
+    await user.save();
+
+    res.json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      token: generateToken(user._id),
+    });
+  } catch (error) {
+    res.status(500).json({ message: `Erro: ${error.message}` });
   }
 };
 
@@ -49,6 +96,9 @@ export const authUser = async (req, res) => {
     const user = await ModelUser.findOne({ email });
 
     if (user && (await user.matchPassword(password))) {
+      if (!user.isVerified) {
+        return res.status(401).json({ message: 'E-mail não verificado.' });
+      }
       res.json({
         _id: user._id,
         name: user.name,

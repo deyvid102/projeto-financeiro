@@ -6,6 +6,7 @@ import cron from "node-cron";
 
 // 1. Importações de Lógica e Models
 import { processDailyRecurrences } from "./cron/ProcessRecurrence.js";
+import processSubscriptions from './cron/ProcessSubscriptions.js';
 import ModelInvestment from "./models/ModelInvestment.js";
 
 // 2. Importações das Rotas
@@ -18,6 +19,8 @@ import routeRecurrence from "./routes/RouteRecurrence.js";
 import routeCard from "./routes/RouteCard.js";
 import routeShoppingCart from "./routes/RouteShoppingCart.js";
 import routeStrategy from "./routes/RouteStrategy.js";
+import routeSubscription from "./routes/RouteSubscription.js";
+import routePlans from './routes/RoutePlans.js';
 
 //AI
 import routeAI from "./AI/RouteAI.js";
@@ -41,6 +44,10 @@ app.use('/api/recurrences', routeRecurrence);
 app.use('/api/cards', routeCard);
 app.use('/api/cart', routeShoppingCart);
 app.use('/api/strategy', routeStrategy);
+
+// Subscriptions
+app.use('/api/subscriptions', routeSubscription);
+app.use('/api/plans', routePlans);
 
 //AI
 app.use('/api/ai', routeAI);
@@ -73,6 +80,15 @@ const startCronJobs = () => {
       }
     } catch (err) {
       console.error("[CRON] Erro no cron de investimentos:", err.message);
+    }
+  });
+
+  // Cron para assinaturas - roda todo dia às 02:00
+  cron.schedule('0 2 * * *', async () => {
+    try {
+      await processSubscriptions();
+    } catch (err) {
+      console.error('[CRON] Erro em subscriptions:', err.message);
     }
   });
 };

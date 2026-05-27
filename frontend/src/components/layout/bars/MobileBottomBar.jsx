@@ -1,15 +1,19 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { navItems } from '../navItems';
+import { getStoredPlan, isPlanAtLeast } from '../../../utils/planUtils';
 
 const MobileBottomBar = () => {
+  const userPlan = getStoredPlan();
+  const menuItems = navItems.filter((item) => isPlanAtLeast(userPlan, item.minPlan));
+
   return (
     <nav
       className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border-ui bg-bg-main/90 backdrop-blur-md pb-[env(safe-area-inset-bottom)]"
       aria-label="Navegação principal"
     >
       <div className="h-14 flex items-center justify-around px-1">
-        {navItems.map((item) => {
+        {menuItems.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink
@@ -44,4 +48,3 @@ const MobileBottomBar = () => {
 };
 
 export default MobileBottomBar;
-

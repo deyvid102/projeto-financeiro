@@ -5,6 +5,8 @@ import Goal from "../models/ModelGoal.js";
 import ShoppingCart from "../models/ModelShoppingCart.js";
 import ModelRecurrence from "../models/ModelRecurrence.js";
 import Investment from "../models/ModelInvestment.js";
+import ModelUser from "../models/ModelUser.js";
+import { isPlanAtLeast } from "../services/planService.js";
 
 dotenv.config();
 
@@ -178,6 +180,22 @@ const gatherUserData = async (userId) => {
 export const getFinancialAiReport = async (req, res) => {
   try {
     const userId = req.user.id;
+    const user = await ModelUser.findById(userId);
+    const userPlan = req.subscription?.plan || 'STARTER';
+    const isMax = isPlanAtLeast(userPlan, 'MAX');
+
+    // Validação de Cooldown para usuários que não são MAX
+    if (!isMax && user.lastAiReportAt) {
+      const cooldown = 5 * 60 * 1000; // 5 minutos em ms
+      const timePassed = Date.now() - new Date(user.lastAiReportAt).getTime();
+
+      if (timePassed < cooldown) {
+        const remaining = Math.ceil((cooldown - timePassed) / 1000 / 60);
+        return res.status(403).json({ 
+          message: `O Auditor está processando dados anteriores. Tente novamente em ${remaining} minuto(s) ou mude para o plano MAX para acesso instantâneo.` 
+        });
+      }
+    }
 
     const summary = await gatherUserData(userId);
 
@@ -222,6 +240,11 @@ export const getFinancialAiReport = async (req, res) => {
       const aiText = completion.choices?.[0]?.message?.content || '{}';
       console.log('[AI REPORT] Raw message content:', aiText);
       const aiData = JSON.parse(aiText || '{}');
+
+      // Atualiza o timestamp do último relatório
+      user.lastAiReportAt = new Date();
+      await user.save();
+
       return res.json({ insight: aiData });
     } catch (err) {
       console.error('[AI REPORT] Error calling model:', err);
@@ -243,8 +266,6 @@ export const getFinancialAiReport = async (req, res) => {
 
 // POST /api/ai/ask
 export const askFinancialAi = async (req, res) => {
-  const dataAtual = new Date().toLocaleDateString('pt-BR');
-
   try {
     const userId = req.user.id;
     const { question } = req.body;

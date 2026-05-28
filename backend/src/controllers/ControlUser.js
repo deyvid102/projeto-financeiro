@@ -139,7 +139,8 @@ export const authUser = async (req, res) => {
 
       if (!user.isVerified) {
         await sendVerificationCode(user);
-        return res.status(401).json({
+        // Usamos 403 para evitar loops de interceptores que tentam renovar token em 401
+        return res.status(403).json({
           message: 'E-mail não verificado. Enviamos um código ao seu e-mail para confirmação.',
         });
       }
@@ -150,7 +151,7 @@ export const authUser = async (req, res) => {
 
       if (verificationAge >= VERIFY_INTERVAL_MS) {
         await sendVerificationCode(user);
-        return res.status(401).json({
+        return res.status(403).json({
           message: 'Sua verificação expirou. Enviamos um novo código ao seu e-mail.',
         });
       }

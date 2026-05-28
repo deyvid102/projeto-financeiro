@@ -120,8 +120,8 @@ function UserLogin() {
     } catch (err) {
       const message = err.response?.data?.message || '';
       
-      // Se o backend retornar que o e-mail não está verificado ou expirou (401)
-      if (err.response?.status === 401 && (message.includes('verificado') || message.includes('expirou'))) {
+      // Captura tanto 401 quanto 403 para o fluxo de verificação
+      if ((err.response?.status === 401 || err.response?.status === 403) && (message.includes('verificado') || message.includes('expirou'))) {
         setStep(2);
         setResendTimer(60);
       } else {

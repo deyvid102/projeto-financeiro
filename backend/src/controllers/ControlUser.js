@@ -11,7 +11,12 @@ const TEST_EMAILS = [
 const VERIFY_INTERVAL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
 
 // Initialize Google OAuth2Client
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const googleClientId = process.env.GOOGLE_CLIENT_ID;
+let client;
+
+if (googleClientId) {
+  client = new OAuth2Client(googleClientId);
+}
 
 // Função auxiliar para gerar o Token JWT
 const generateToken = (id) => {
@@ -175,6 +180,10 @@ export const authUser = async (req, res) => {
 export const googleAuthUser = async (req, res) => {
   try {
     const { idToken } = req.body;
+
+    if (!client) {
+      return res.status(500).json({ message: 'Configuração do Google Login ausente no servidor.' });
+    }
 
     if (!idToken) {
       return res.status(400).json({ message: 'Token de autenticação Google não fornecido.' });

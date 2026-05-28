@@ -4,11 +4,15 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true, // true para porta 465
   auth: {
     user: 'suportefinancemax@gmail.com',
     pass: process.env.EMAIL_APP_PASSWORD, // Use uma "Senha de App" do Google
   },
+  // Adiciona tempo de espera para evitar timeouts em conexões lentas do servidor
+  connectionTimeout: 10000, 
 });
 
 export const sendVerificationEmail = async (email, code) => {

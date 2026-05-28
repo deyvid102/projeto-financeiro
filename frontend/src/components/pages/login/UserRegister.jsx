@@ -194,7 +194,7 @@ function UserRegister() {
       <div className="home-page-container min-h-screen bg-background flex flex-col">
         {/* Nav */}
         <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/70 border-b border-border">
-          <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
             <Link to="/">
               <Logo />
             </Link>
@@ -211,18 +211,18 @@ function UserRegister() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 flex items-center justify-center px-6 py-12">
-          <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-12 items-center">
+        <main className="flex-1 flex items-center justify-center px-6 py-8">
+          <div className="w-full max-w-4xl grid lg:grid-cols-2 gap-10 items-center">
             {/* Left — Marketing */}
             <div className="hidden lg:block animate-fade-up">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-bold tracking-widest uppercase text-primary mb-6">
                 <Sparkles className="w-3.5 h-3.5" /> Comece grátis agora
               </div>
-              <h1 className="text-5xl font-black leading-[0.95] tracking-tight">
+              <h1 className="text-4xl font-black leading-[0.95] tracking-tight">
                 CONTROLE SEU <span className="text-gradient italic-display">PATRIMÔNIO</span>
                 <br /> COM INTELIGÊNCIA.
               </h1>
-              <p className="mt-6 text-lg text-muted-foreground max-w-md">
+              <p className="mt-6 text-base text-muted-foreground max-w-xs">
                 Crie sua conta gratuita e tenha acesso ao dashboard básico. Atualize para Pro ou Max a qualquer momento.
               </p>
 
@@ -245,7 +245,7 @@ function UserRegister() {
 
             {/* Right — Form */}
             <div className="animate-fade-up" style={{ animationDelay: '0.15s' }}>
-              <div className="bg-card rounded-3xl shadow-card border border-border p-8 md:p-10">
+              <div className="bg-card rounded-3xl shadow-card border border-border p-7 md:p-9">
                 <div className="text-center mb-8">
                   <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand mb-4 shadow-glow">
                     <User className="w-7 h-7 text-white" strokeWidth={2.5} />
@@ -370,7 +370,7 @@ function UserRegister() {
       <div className="home-page-container min-h-screen bg-background flex flex-col">
         {/* Nav */}
         <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/70 border-b border-border">
-          <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
             <Link to="/">
               <Logo />
             </Link>
@@ -384,18 +384,18 @@ function UserRegister() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 flex items-center justify-center px-6 py-12">
-          <div className="w-full max-w-6xl">
-            <div className="animate-fade-up text-center mb-12">
+        <main className="flex-1 flex items-center justify-center px-6 py-8">
+          <div className="w-full max-w-4xl">
+            <div className="animate-fade-up text-center mb-8">
               <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-4">
                 ESCOLHA SEU <span className="text-gradient italic-display">PLANO</span>
               </h2>
-              <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              <p className="text-base text-muted-foreground max-w-xl mx-auto">
                 Comece com o Starter grátis ou escolha Pro/Max para desbloquear mais funcionalidades. Você pode trocar de plano a qualquer momento.
               </p>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            <div className="grid md:grid-cols-3 gap-5 max-w-3xl mx-auto">
               {PLANS.map((plan) => (
                 <div
                   key={plan.key}
@@ -454,7 +454,7 @@ function UserRegister() {
     <div className="home-page-container min-h-screen bg-background flex flex-col">
       {/* Nav */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/70 border-b border-border">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link to="/">
             <Logo />
           </Link>
@@ -468,10 +468,10 @@ function UserRegister() {
       </header>
 
       {/* Content */}
-      <main className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-2xl">
+      <main className="flex-1 flex items-center justify-center px-6 py-8">
+        <div className="w-full max-w-lg">
           <div className="animate-fade-up">
-            <div className="bg-card rounded-3xl shadow-card border border-border p-8 md:p-12 text-center">
+            <div className="bg-card rounded-3xl shadow-card border border-border p-7 md:p-10 text-center">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand mb-6 shadow-glow mx-auto">
                 <Zap className="w-8 h-8 text-white" />
               </div>
@@ -539,12 +539,12 @@ function UserRegister() {
   return (
     <div className="home-page-container min-h-screen bg-background flex flex-col">
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/70 border-b border-border">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link to="/"><Logo /></Link>
         </div>
       </header>
-      <main className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-md">
+      <main className="flex-1 flex items-center justify-center px-6 py-8">
+        <div className="w-full max-w-[380px]">
           <div className="bg-card rounded-3xl shadow-card border border-border p-8 text-center">
             <h2 className="text-2xl font-black mb-2">Verifique seu e-mail</h2>
             <p className="text-sm text-muted-foreground mb-6">

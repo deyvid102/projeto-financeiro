@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   TrendingUp, ArrowRight, Mail, Lock, Eye, EyeOff, ShieldCheck, Sparkles,
-  BarChart3, Wallet, Target, Brain,
+  BarChart3, Wallet, Target, Brain, ArrowLeft,
 } from 'lucide-react';
 import api from '/src/services/api.js';
 import { fetchAndStoreUserPlan } from '../../../utils/planUtils';
@@ -25,14 +25,89 @@ function Logo() {
 
 function UserLogin() {
   const navigate = useNavigate();
+  const [step, setStep] = useState(1); // 1: Login, 2: Verificação de Código
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
+
+  // Efeito para o countdown do reenvio de código
+  useEffect(() => {
+    let interval;
+    if (resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendTimer]);
+
+  const handleGoogleLoginSuccess = async (response) => {
+    setError('');
+    setLoading(true);
+    try {
+      const res = await api.post('/users/google-login', { idToken: response.credential });
+      localStorage.setItem('token', res.data.token);
+      const userName = res.data.user?.name || res.data.name;
+      if (userName) localStorage.setItem('user_name', userName);
+      await fetchAndStoreUserPlan(api);
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Erro ao fazer login com Google.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Google Login Integration
+  useEffect(() => {
+    if (step !== 1) return; // Só tenta renderizar se estiver na tela de login
+
+    const scriptId = 'google-gsi-client';
+    let script = document.getElementById(scriptId);
+
+    const renderGoogleButton = () => {
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+      const buttonDiv = document.getElementById('google-sign-in-button');
+
+      if (!clientId) {
+        // Se o clientId ainda não carregou, não faz nada para não poluir o console
+        return;
+      }
+
+      if (window.google?.accounts?.id && buttonDiv) {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: handleGoogleLoginSuccess,
+          auto_select: false,
+          locale: 'pt_BR' // Garante que o texto do Google venha em Português
+        });
+        window.google.accounts.id.renderButton(buttonDiv, {
+          theme: 'outline', size: 'large', text: 'signin_with', width: '100%', shape: 'pill'
+        });
+      }
+    };
+
+    if (!script) {
+      script = document.createElement('script');
+      script.id = scriptId;
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = renderGoogleButton;
+      document.body.appendChild(script);
+    } else {
+      // Se o script já existe, aguarda um instante para o React montar a div e renderiza
+      const timeout = setTimeout(renderGoogleButton, 100);
+      return () => clearTimeout(timeout);
+    }
+  }, [step]); // Adicionado step como dependência para renderizar o botão ao voltar para o login
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setError('');
     setLoading(true);
     try {
@@ -43,17 +118,110 @@ function UserLogin() {
       await fetchAndStoreUserPlan(api);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'E-mail ou senha incorretos.');
+      const message = err.response?.data?.message || '';
+      
+      // Se o backend retornar que o e-mail não está verificado ou expirou (401)
+      if (err.response?.status === 401 && (message.includes('verificado') || message.includes('expirou'))) {
+        setStep(2);
+        setResendTimer(60);
+      } else {
+        setError(message || 'E-mail ou senha incorretos.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const handleVerification = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const verifyRes = await api.post('/users/verify-email', {
+        email,
+        code: verificationCode,
+      });
+      
+      localStorage.setItem('token', verifyRes.data.token);
+      const userName = verifyRes.data.name;
+      if (userName) localStorage.setItem('user_name', userName);
+      
+      await fetchAndStoreUserPlan(api);
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Código inválido ou expirado.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (resendTimer > 0 || loading) return;
+    await handleSubmit();
+  };
+
+  // Renderização do passo de verificação (similar ao UserRegister)
+  if (step === 2) {
+    return (
+      <div className="home-page-container min-h-screen bg-background flex flex-col">
+        <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/70 border-b border-border">
+          <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+            <button onClick={() => setStep(1)} className="flex items-center gap-1.5 text-sm font-bold text-primary hover:text-primary/80 transition">
+              <ArrowLeft className="w-4 h-4" /> Voltar ao login
+            </button>
+            <Logo />
+          </div>
+        </header>
+        <main className="flex-1 flex items-center justify-center px-6 py-8">
+          <div className="w-full max-w-[380px]">
+            <div className="bg-card rounded-3xl shadow-card border border-border p-7 text-center animate-fade-up">
+              <h2 className="text-2xl font-black mb-2">Verifique seu e-mail</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                Enviamos um código de verificação para <strong>{email}</strong>
+              </p>
+
+              {error && <div className="bg-destructive/10 text-destructive p-3 rounded-xl text-xs font-bold mb-4">{error}</div>}
+
+              <form onSubmit={handleVerification} className="space-y-4">
+                <input
+                  type="text"
+                  maxLength="6"
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="000000"
+                  className="w-full text-center text-3xl font-black tracking-[0.5em] py-4 rounded-2xl bg-muted/50 border border-border outline-none focus:ring-2 focus:ring-brand"
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={loading || verificationCode.length < 6}
+                  className="w-full py-4 rounded-full bg-brand text-white font-black shadow-glow disabled:opacity-50"
+                >
+                  {loading ? 'Verificando...' : 'Confirmar e Entrar'}
+                </button>
+              </form>
+
+              <div className="mt-6">
+                <button 
+                  onClick={handleResendCode}
+                  disabled={resendTimer > 0 || loading}
+                  className="text-xs font-bold text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
+                >
+                  {resendTimer > 0 ? `Reenviar código em ${resendTimer}s` : 'Reenviar código'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="home-page-container min-h-screen bg-background flex flex-col">
       {/* Nav */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/70 border-b border-border">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link to="/">
             <Logo />
           </Link>
@@ -70,18 +238,18 @@ function UserLogin() {
       </header>
 
       {/* Content */}
-      <main className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-12 items-center">
+      <main className="flex-1 flex items-center justify-center px-6 py-8">
+        <div className="w-full max-w-4xl grid lg:grid-cols-2 gap-10 items-center">
           {/* Left — Marketing */}
           <div className="hidden lg:block animate-fade-up">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-bold tracking-widest uppercase text-primary mb-6">
               <Sparkles className="w-3.5 h-3.5" /> Bem-vindo de volta
             </div>
-            <h1 className="text-5xl font-black leading-[0.95] tracking-tight">
+            <h1 className="text-4xl font-black leading-[0.95] tracking-tight">
               SEU <span className="text-gradient italic-display">PATRIMÔNIO</span>
               <br /> ESPERA POR VOCÊ.
             </h1>
-            <p className="mt-6 text-lg text-muted-foreground max-w-md">
+            <p className="mt-6 text-base text-muted-foreground max-w-xs">
               Acesse seu dashboard, acompanhe investimentos, metas e deixe o Auditor IA guiar suas decisões financeiras.
             </p>
 
@@ -104,7 +272,7 @@ function UserLogin() {
 
           {/* Right — Form */}
           <div className="animate-fade-up" style={{ animationDelay: '0.15s' }}>
-            <div className="bg-card rounded-3xl shadow-card border border-border p-8 md:p-10">
+            <div className="bg-card rounded-3xl shadow-card border border-border p-7 md:p-9">
               <div className="text-center mb-8">
                 <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand mb-4 shadow-glow">
                   <TrendingUp className="w-7 h-7 text-white" strokeWidth={2.5} />
@@ -166,9 +334,12 @@ function UserLogin() {
                     <input type="checkbox" className="w-4 h-4 rounded border-border accent-primary" />
                     <span className="text-sm text-muted-foreground">Lembrar de mim</span>
                   </label>
-                  <a href="#" className="text-sm font-bold text-primary hover:underline">
+                  <Link 
+                    to="/forgot-password" 
+                    className={`text-sm font-bold text-primary hover:underline ${loading ? 'pointer-events-none opacity-50' : ''}`}
+                  >
                     Esqueceu a senha?
-                  </a>
+                  </Link>
                 </div>
 
                 <button
@@ -192,18 +363,7 @@ function UserLogin() {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full border-2 border-foreground/10 font-bold hover:border-primary hover:text-primary transition"
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
-                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.84z" fill="#FBBC05" />
-                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l2.85 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                  </svg>
-                  Entrar com Google
-                </button>
+                <div id="google-sign-in-button" className="w-full"></div>
               </form>
 
               <p className="text-center text-sm text-muted-foreground mt-6">

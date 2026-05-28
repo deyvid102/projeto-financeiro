@@ -1,12 +1,41 @@
 import ModelUser from '../models/ModelUser.js';
 import jwt from 'jsonwebtoken';
-import { sendVerificationEmail } from '../services/EmailService.js';
+import { sendVerificationEmail, sendResetPasswordEmail } from '../services/EmailService.js';
+import { OAuth2Client } from 'google-auth-library';
+
+const TEST_EMAILS = [
+  'starter@financemax.com',
+  'pro@financemax.com',
+  'max@financemax.com',
+];
+const VERIFY_INTERVAL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
+
+// Initialize Google OAuth2Client
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Função auxiliar para gerar o Token JWT
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: '30d',
   });
+};
+
+const isTestEmail = (email) => {
+  return TEST_EMAILS.includes(email?.toLowerCase());
+};
+
+const generateVerificationCode = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+const sendVerificationCode = async (user) => {
+  const newCode = generateVerificationCode();
+  user.verificationCode = newCode;
+  user.verificationCodeExpires = Date.now() + 10 * 60 * 1000;
+  user.lastVerificationSentAt = Date.now();
+  user.isVerified = false;
+  await user.save();
+  await sendVerificationEmail(user.email, newCode);
 };
 
 // @desc    Registrar um novo usuário
@@ -23,9 +52,10 @@ export const registerUser = async (req, res) => {
     if (userExists) {
       // Se o usuário existe mas não está verificado, gera um novo código e reenvia o e-mail
       if (!userExists.isVerified) {
-        const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const newCode = generateVerificationCode();
         userExists.verificationCode = newCode;
         userExists.verificationCodeExpires = Date.now() + 10 * 60 * 1000;
+        userExists.lastVerificationSentAt = Date.now();
         await userExists.save();
         await sendVerificationEmail(email, newCode);
         return res.status(200).json({ message: 'Código de verificação reenviado ao e-mail.' });
@@ -34,7 +64,7 @@ export const registerUser = async (req, res) => {
     }
 
     // Gera código de 6 dígitos
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationCode = generateVerificationCode();
     const verificationCodeExpires = Date.now() + 10 * 60 * 1000; // 10 minutos
 
     const user = await ModelUser.create({
@@ -43,6 +73,7 @@ export const registerUser = async (req, res) => {
       password,
       verificationCode,
       verificationCodeExpires,
+      lastVerificationSentAt: Date.now(),
     });
 
     if (user) {
@@ -72,6 +103,7 @@ export const verifyEmail = async (req, res) => {
     }
 
     user.isVerified = true;
+    user.verificationConfirmedAt = Date.now();
     user.verificationCode = undefined;
     user.verificationCodeExpires = undefined;
     await user.save();
@@ -96,9 +128,33 @@ export const authUser = async (req, res) => {
     const user = await ModelUser.findOne({ email });
 
     if (user && (await user.matchPassword(password))) {
-      if (!user.isVerified) {
-        return res.status(401).json({ message: 'E-mail não verificado.' });
+      if (isTestEmail(email)) {
+        return res.json({
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          token: generateToken(user._id),
+        });
       }
+
+      if (!user.isVerified) {
+        await sendVerificationCode(user);
+        return res.status(401).json({
+          message: 'E-mail não verificado. Enviamos um código ao seu e-mail para confirmação.',
+        });
+      }
+
+      const verificationAge = user.verificationConfirmedAt
+        ? Date.now() - new Date(user.verificationConfirmedAt).getTime()
+        : VERIFY_INTERVAL_MS + 1;
+
+      if (verificationAge >= VERIFY_INTERVAL_MS) {
+        await sendVerificationCode(user);
+        return res.status(401).json({
+          message: 'Sua verificação expirou. Enviamos um novo código ao seu e-mail.',
+        });
+      }
+
       res.json({
         _id: user._id,
         name: user.name,
@@ -110,6 +166,125 @@ export const authUser = async (req, res) => {
     }
   } catch (error) {
     res.status(500).json({ message: `Erro no servidor: ${error.message}` });
+  }
+};
+
+// @desc    Autenticar usuário com Google
+// @route   POST /api/users/google-login
+export const googleAuthUser = async (req, res) => {
+  try {
+    const { idToken } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({ message: 'Token de autenticação Google não fornecido.' });
+    }
+
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+
+    const { email, name } = payload; // Google também fornece 'picture' para avatar
+
+    let user = await ModelUser.findOne({ email });
+
+    if (user) {
+      // Usuário existe, atualiza o nome se necessário e garante que está verificado
+      if (user.name !== name) {
+        user.name = name;
+      }
+      if (!user.isVerified) {
+        user.isVerified = true;
+        user.verificationConfirmedAt = Date.now();
+        user.verificationCode = undefined;
+        user.verificationCodeExpires = undefined;
+      }
+      await user.save();
+    } else {
+      // Usuário não existe, cria um novo
+      // Para login com Google, podemos gerar uma senha fictícia ou marcar como login social
+      const randomPassword = Math.random().toString(36).slice(-8); // Gera uma string aleatória de 8 caracteres
+      user = await ModelUser.create({
+        name,
+        email,
+        password: randomPassword, // Será hashed pelo hook pre-save
+        isVerified: true,
+        verificationConfirmedAt: Date.now(),
+        // Não é necessário verificationCode ou expires para login social
+      });
+    }
+
+    if (user) {
+      res.json({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        token: generateToken(user._id),
+      });
+    } else {
+      res.status(400).json({ message: 'Não foi possível autenticar com Google.' });
+    }
+  } catch (error) {
+    console.error('Erro na autenticação Google:', error);
+    res.status(500).json({ message: `Erro na autenticação Google: ${error.message}` });
+  }
+};
+
+// @desc    Solicitar reset de senha
+// @route   POST /api/users/forgot-password
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await ModelUser.findOne({ email });
+
+    if (!user) {
+      // Para segurança, não revelamos se o e-mail existe ou não
+      return res.status(200).json({ message: 'Se o e-mail existir, um código foi enviado.' });
+    }
+
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    user.resetPasswordCode = resetCode;
+    user.resetPasswordExpires = Date.now() + 10 * 60 * 1000;
+    await user.save();
+
+    await sendResetPasswordEmail(email, resetCode);
+    res.json({ message: 'Código de recuperação enviado ao e-mail.' });
+  } catch (error) {
+    res.status(500).json({ message: `Erro: ${error.message}` });
+  }
+};
+
+// @desc    Resetar senha usando código
+// @route   POST /api/users/reset-password
+export const resetPassword = async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ message: 'A senha deve ter pelo menos 6 caracteres.' });
+    }
+
+    const user = await ModelUser.findOne({
+      email,
+      resetPasswordCode: code,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Código inválido ou expirado.' });
+    }
+
+    user.password = newPassword;
+    user.resetPasswordCode = undefined;
+    user.resetPasswordExpires = undefined;
+    // Se o usuário conseguiu resetar a senha, ele provou posse do e-mail
+    user.isVerified = true; 
+    await user.save();
+
+    res.json({ message: 'Senha atualizada com sucesso! Você já pode fazer login.' });
+  } catch (error) {
+    res.status(500).json({ message: `Erro: ${error.message}` });
   }
 };
 

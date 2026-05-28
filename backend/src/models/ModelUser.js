@@ -28,8 +28,18 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    verificationConfirmedAt: {
+      type: Date,
+      default: null,
+    },
+    lastVerificationSentAt: {
+      type: Date,
+      default: null,
+    },
     verificationCode: String,
     verificationCodeExpires: Date,
+    resetPasswordCode: String,
+    resetPasswordExpires: Date,
   },
   {
     timestamps: true, // Cria automaticamente campos createdAt e updatedAt

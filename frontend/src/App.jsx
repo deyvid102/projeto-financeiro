@@ -5,6 +5,7 @@ import { isPlanAtLeast, getStoredPlan } from './utils/planUtils';
 // Páginas
 import UserLogin from './components/pages/login/UserLogin';
 import UserRegister from './components/pages/login/UserRegister';
+import ForgotPassword from './components/pages/login/ForgotPassword';
 import Home from './components/pages/Home';
 import DashPanel from './components/pages/panel/DashPanel';
 import TransactionsPanel from './components/pages/panel/TransactionsPanel';
@@ -36,6 +37,7 @@ function App() {
           {/* Rotas Públicas */}
           <Route path="/login" element={<UserLogin />} />
           <Route path="/register" element={<UserRegister />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
 
           {/* Rotas Privadas (Envolvidas pelo MainLayout) */}
           <Route path="/dashboard" element={

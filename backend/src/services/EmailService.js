@@ -4,10 +4,12 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail', // Usar 'service' é mais confiável para o Gmail no Render
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true, // true para porta 465 (SSL)
   auth: {
     user: 'suportefinancemax@gmail.com',
-    pass: process.env.EMAIL_APP_PASSWORD, // Use uma "Senha de App" do Google
+    pass: process.env.EMAIL_APP_PASSWORD ? process.env.EMAIL_APP_PASSWORD.replace(/\s/g, '') : '', 
   },
   tls: {
     // Ajuda a evitar erros de conexão em ambientes de hospedagem
@@ -39,7 +41,8 @@ export const sendVerificationEmail = async (email, code) => {
   try {
     await transporter.sendMail(mailOptions);
   } catch (error) {
-    console.error('ERRO NODEMAILER (VERIFICAÇÃO):', error);
+    // Log detalhado para você ver no painel do Render
+    console.error('ERRO NODEMAILER (VERIFICAÇÃO):', error.message, error.code);
     throw new Error('Não foi possível enviar o e-mail de verificação.');
   }
 };
@@ -66,7 +69,8 @@ export const sendResetPasswordEmail = async (email, code) => {
   try {
     await transporter.sendMail(mailOptions);
   } catch (error) {
-    console.error('ERRO NODEMAILER (RECURERAÇÃO):', error);
+    // Log detalhado para você ver no painel do Render
+    console.error('ERRO NODEMAILER (RECUPERAÇÃO):', error.message, error.code);
     throw new Error('Não foi possível enviar o e-mail de recuperação.');
   }
 };

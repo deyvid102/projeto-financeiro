@@ -3,20 +3,29 @@ import nodemailer from 'nodemailer';
 
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
+  port: 587,
+  secure: false, // false para usar STARTTLS na porta 587
   pool: true, // Mantém a conexão aberta para múltiplos envios
   auth: {
     user: process.env.EMAIL_USER, // Seu e-mail Gmail
     pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/[\s"']/g, '') : '', // Remove espaços e aspas
   },
   tls: {
-    // Garante que o servidor não rejeite a conexão por certificados SNI em alguns ambientes
-    servername: 'smtp.gmail.com',
     rejectUnauthorized: false // Evita falhas de handshake em redes de proxy do Render
   },
-  // Adiciona tempo de espera para evitar timeouts em conexões lentas do servidor
-  connectionTimeout: 10000, 
+  // Aumentando os tempos de espera para evitar timeouts em ambiente cloud
+  connectionTimeout: 20000, 
+  greetingTimeout: 20000,   // Tempo máximo para esperar a saudação do servidor SMTP
+  socketTimeout: 30000      // Tempo máximo de inatividade do socket
+});
+
+// Verifica a conexão SMTP no início para logar erros no Render
+transporter.verify((error, success) => {
+  if (error) {
+    console.error('❌ ERRO DE CONEXÃO SMTP NO RENDER:', error.message);
+  } else {
+    console.log('📧 Servidor de e-mail pronto para enviar mensagens');
+  }
 });
 
 export const sendVerificationEmail = async (email, code) => {

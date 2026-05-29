@@ -166,10 +166,12 @@ function UserLogin() {
       <div className="home-page-container min-h-screen bg-background flex flex-col">
         <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/70 border-b border-border">
           <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+            <Link to="/">
+              <Logo />
+            </Link>
             <button onClick={() => setStep(1)} className="flex items-center gap-1.5 text-sm font-bold text-primary hover:text-primary/80 transition">
               <ArrowLeft className="w-4 h-4" /> Voltar ao login
             </button>
-            <Logo />
           </div>
         </header>
         <main className="flex-1 flex items-center justify-center px-6 py-8">

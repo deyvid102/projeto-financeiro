@@ -249,8 +249,7 @@ export const forgotPassword = async (req, res) => {
     const user = await ModelUser.findOne({ email });
 
     if (!user) {
-      // Para segurança, não revelamos se o e-mail existe ou não
-      return res.status(200).json({ message: 'Se o e-mail existir, um código foi enviado.' });
+      return res.status(404).json({ message: 'Este e-mail não está cadastrado em nosso sistema.' });
     }
 
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -263,6 +262,27 @@ export const forgotPassword = async (req, res) => {
   } catch (error) {
     console.error('DETALHE DO ERRO NO FORGOT-PASSWORD:', error);
     res.status(500).json({ message: error.message || `Erro no servidor: ${error.message}` });
+  }
+};
+
+// @desc    Validar código de reset antes de mudar senha
+// @route   POST /api/users/validate-reset-code
+export const validateResetCode = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    const user = await ModelUser.findOne({
+      email,
+      resetPasswordCode: code,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Código inválido ou expirado.' });
+    }
+
+    res.status(200).json({ message: 'Código válido.' });
+  } catch (error) {
+    res.status(500).json({ message: `Erro ao validar código: ${error.message}` });
   }
 };
 

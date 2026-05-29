@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   TrendingUp, ArrowRight, Mail, Lock, Eye, EyeOff, ArrowLeft, ShieldCheck, Key
@@ -32,6 +32,18 @@ function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [resendTimer, setResendTimer] = useState(0);
+
+  // Efeito para o countdown do reenvio
+  useEffect(() => {
+    let interval;
+    if (resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendTimer]);
 
   const handleRequestReset = async (e) => {
     e.preventDefault();
@@ -40,8 +52,37 @@ function ForgotPassword() {
     try {
       await api.post('/users/forgot-password', { email });
       setStep(2);
+      setResendTimer(60);
     } catch (err) {
       setError(err.response?.data?.message || 'Erro ao processar solicitação.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (resendTimer > 0 || loading) return;
+    setError('');
+    setLoading(true);
+    try {
+      await api.post('/users/forgot-password', { email });
+      setResendTimer(60);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Erro ao processar solicitação.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await api.post('/users/validate-reset-code', { email, code });
+      setStep(3);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Código inválido ou expirado.');
     } finally {
       setLoading(false);
     }
@@ -74,10 +115,18 @@ function ForgotPassword() {
     <div className="home-page-container min-h-screen bg-background flex flex-col">
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/70 border-b border-border">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <button onClick={() => step === 1 ? navigate('/login') : setStep(step - 1)} className="flex items-center gap-1.5 text-sm font-bold text-primary hover:text-primary/80 transition">
-            <ArrowLeft className="w-4 h-4" /> Voltar
-          </button>
-          <Logo />
+          <Link to="/">
+            <Logo />
+          </Link>
+          <div className="flex items-center gap-3">
+            <span className="hidden sm:inline text-sm text-muted-foreground">Não tem conta?</span>
+            <Link
+              to="/register"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-brand text-white text-sm font-bold shadow-glow hover:opacity-90 transition"
+            >
+              Criar conta <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -128,7 +177,7 @@ function ForgotPassword() {
                 )}
 
                 {step === 2 && (
-                  <form onSubmit={(e) => { e.preventDefault(); setStep(3); }} className="space-y-4">
+                  <form onSubmit={handleVerifyCode} className="space-y-4">
                     <div className="relative text-left">
                       <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 px-1">Código de 6 dígitos</label>
                       <input
@@ -141,9 +190,19 @@ function ForgotPassword() {
                         className="w-full text-center text-3xl font-black tracking-[0.5em] py-4 rounded-2xl bg-muted/50 border border-border outline-none focus:ring-2 focus:ring-brand"
                       />
                     </div>
-                    <button type="submit" disabled={code.length < 6} className="w-full py-3.5 rounded-full bg-brand text-white font-bold shadow-glow hover:opacity-90 transition disabled:opacity-50">
-                      Próxima etapa
+                    <button type="submit" disabled={loading || code.length < 6} className="w-full py-3.5 rounded-full bg-brand text-white font-bold shadow-glow hover:opacity-90 transition disabled:opacity-50">
+                      {loading ? 'Validando...' : 'Próxima etapa'}
                     </button>
+                    <div className="mt-6">
+                      <button
+                        type="button"
+                        onClick={handleResendCode}
+                        disabled={resendTimer > 0 || loading}
+                        className="text-xs font-bold text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
+                      >
+                        {resendTimer > 0 ? `Reenviar código em ${resendTimer}s` : 'Reenviar código'}
+                      </button>
+                    </div>
                   </form>
                 )}
 

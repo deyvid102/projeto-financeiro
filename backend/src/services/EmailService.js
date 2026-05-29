@@ -4,12 +4,12 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true, // true para porta 465 (SSL)
+  host: 'smtp-relay.brevo.com',
+  port: 587,
+  secure: false, // false para porta 587 (STARTTLS)
   auth: {
-    user: 'suportefinancemax@gmail.com',
-    pass: process.env.EMAIL_APP_PASSWORD ? process.env.EMAIL_APP_PASSWORD.replace(/\s/g, '') : '', 
+    user: process.env.EMAIL_USER, // Seu e-mail de login no Brevo
+    pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.trim() : '', // Sua SMTP Key
   },
   tls: {
     // Ajuda a evitar erros de conexão em ambientes de hospedagem
@@ -21,7 +21,7 @@ const transporter = nodemailer.createTransport({
 
 export const sendVerificationEmail = async (email, code) => {
   const mailOptions = {
-    from: '"FinanceMAX Suporte" <suportefinancemax@gmail.com>',
+    from: `"FinanceMAX Suporte" <${process.env.EMAIL_USER}>`, // Agora usa o e-mail configurado
     to: email,
     subject: 'Seu código de verificação FinanceMAX',
     html: `
@@ -49,7 +49,7 @@ export const sendVerificationEmail = async (email, code) => {
 
 export const sendResetPasswordEmail = async (email, code) => {
   const mailOptions = {
-    from: '"FinanceMAX Suporte" <suportefinancemax@gmail.com>',
+    from: `"FinanceMAX Suporte" <${process.env.EMAIL_USER}>`,
     to: email,
     subject: 'Recuperação de senha FinanceMAX',
     html: `

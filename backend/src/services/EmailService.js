@@ -3,8 +3,8 @@ import nodemailer from 'nodemailer';
 
 const transporter = nodemailer.createTransport({
   host: 'smtp-relay.brevo.com',
-  port: 465,
-  secure: true, // SSL na 465
+  port: 587,
+  secure: false, // STARTTLS na 587
   family: 4, // Força o uso de IPv4 para evitar timeouts de rede no Render
   pool: true, // Mantém a conexão aberta para múltiplos envios
   auth: {

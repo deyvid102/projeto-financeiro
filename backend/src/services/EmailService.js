@@ -14,14 +14,15 @@ const transporter = nodemailer.createTransport({
   debug: false, // Desativado pois o teste foi bem sucedido
   logger: false,
   tls: {
+    requireTLS: true, // Garante que a conexão suba para TLS obrigatório
     rejectUnauthorized: false // Evita falhas de handshake em redes de proxy do Render
   },
   // E-mail que aparecerá como remetente para o usuário final
   from: '"FinanceMAX Suporte" <suportefinancemax@gmail.com>',
   // Aumentando os tempos de espera para evitar timeouts em ambiente cloud
-  connectionTimeout: 30000,
-  greetingTimeout: 30000,   // Tempo máximo para esperar a saudação do servidor SMTP
-  socketTimeout: 60000      // Tempo máximo de inatividade do socket
+  connectionTimeout: 45000, // 45 segundos para conexão inicial
+  greetingTimeout: 45000,   // 45 segundos para saudação
+  socketTimeout: 90000      // 90 segundos de inatividade
 });
 
 export const sendVerificationEmail = async (email, code) => {

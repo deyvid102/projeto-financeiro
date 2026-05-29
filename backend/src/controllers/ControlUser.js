@@ -16,6 +16,9 @@ let client;
 
 if (googleClientId) {
   client = new OAuth2Client(googleClientId);
+  console.log('✅ Google OAuth2Client inicializado com sucesso.');
+} else {
+  console.warn('⚠️ AVISO: GOOGLE_CLIENT_ID não encontrado. Google Login não funcionará.');
 }
 
 // Função auxiliar para gerar o Token JWT

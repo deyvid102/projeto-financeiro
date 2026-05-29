@@ -1,36 +1,31 @@
 import 'dotenv/config';
-import nodemailer from 'nodemailer';
+import axios from 'axios';
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false, // STARTTLS na 587
-  family: 4, // Força o uso de IPv4 para evitar timeouts de rede no Render
-  pool: true, // Mantém a conexão aberta para múltiplos envios
-  auth: {
-    user: process.env.EMAIL_USER ? process.env.EMAIL_USER.trim() : '', 
-    pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.trim() : '', // Sua SMTP Key (xsmtpsib...)
-  },
-  debug: false, // Desativado pois o teste foi bem sucedido
-  logger: false,
-  tls: {
-    requireTLS: true, // Garante que a conexão suba para TLS obrigatório
-    rejectUnauthorized: false // Evita falhas de handshake em redes de proxy do Render
-  },
-  // E-mail que aparecerá como remetente para o usuário final
-  from: '"FinanceMAX Suporte" <suportefinancemax@gmail.com>',
-  // Aumentando os tempos de espera para evitar timeouts em ambiente cloud
-  connectionTimeout: 45000, // 45 segundos para conexão inicial
-  greetingTimeout: 45000,   // 45 segundos para saudação
-  socketTimeout: 90000      // 90 segundos de inatividade
-});
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+const SENDER_EMAIL = "suportefinancemax@gmail.com";
+const SENDER_NAME = "FinanceMAX Suporte";
+
+const sendBrevoEmail = async (to, subject, htmlContent) => {
+  return await axios.post(
+    BREVO_API_URL,
+    {
+      sender: { name: SENDER_NAME, email: SENDER_EMAIL },
+      to: [{ email: to }],
+      subject,
+      htmlContent
+    },
+    {
+      headers: {
+        'api-key': BREVO_API_KEY,
+        'Content-Type': 'application/json'
+      }
+    }
+  );
+};
 
 export const sendVerificationEmail = async (email, code) => {
-  const mailOptions = {
-    from: transporter.options.from,
-    to: email,
-    subject: 'Seu código de verificação FinanceMAX',
-    html: `
+  const html = `
       <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 10px;">
         <h2 style="color: #3b82f6;">Bem-vindo ao FinanceMAX!</h2>
         <p>Use o código abaixo para confirmar a criação da sua conta:</p>
@@ -41,24 +36,19 @@ export const sendVerificationEmail = async (email, code) => {
           Este código expira em 10 minutos. Se você não solicitou este código, ignore este e-mail.
         </p>
       </div>
-    `,
-  };
+    `;
 
   try {
-    await transporter.sendMail(mailOptions);
+    await sendBrevoEmail(email, 'Seu código de verificação FinanceMAX', html);
   } catch (error) {
-    console.error('❌ FALHA CRÍTICA NO ENVIO DE VERIFICAÇÃO:', error);
-    console.error('ESTADO DA AUTH:', { user: process.env.EMAIL_USER, hasPass: !!process.env.EMAIL_PASS });
+    console.error('❌ FALHA NO ENVIO DE VERIFICAÇÃO (API):', error.response?.data || error.message);
+    console.error('ESTADO DA AUTH:', { hasApiKey: !!BREVO_API_KEY });
     throw new Error('Não foi possível enviar o e-mail de verificação.');
   }
 };
 
 export const sendResetPasswordEmail = async (email, code) => {
-  const mailOptions = {
-    from: transporter.options.from,
-    to: email,
-    subject: 'Recuperação de senha FinanceMAX',
-    html: `
+  const html = `
       <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 10px;">
         <h2 style="color: #3b82f6;">Recuperação de Senha</h2>
         <p>Você solicitou a alteração da sua senha no FinanceMAX. Use o código abaixo para prosseguir:</p>
@@ -69,22 +59,13 @@ export const sendResetPasswordEmail = async (email, code) => {
           Este código expira em 10 minutos. Se você não solicitou a alteração, ignore este e-mail.
         </p>
       </div>
-    `,
-  };
+    `;
 
   try {
-    await transporter.sendMail(mailOptions);
+    await sendBrevoEmail(email, 'Recuperação de senha FinanceMAX', html);
   } catch (error) {
-    const passValue = process.env.EMAIL_PASS || '';
-    const isBrevoKey = passValue.startsWith('xsmtpsib-');
-    
-    console.error('❌ FALHA CRÍTICA NA RECUPERAÇÃO DE SENHA:', error);
-    console.error('RESPOSTA TÉCNICA SMTP:', error.response);
-    console.error('ESTADO DA AUTH:', { 
-      user: process.env.EMAIL_USER, 
-      isValidFormat: isBrevoKey,
-      keyPrefix: passValue.substring(0, 9) 
-    });
+    console.error('❌ FALHA NA RECUPERAÇÃO DE SENHA (API):', error.response?.data || error.message);
+    console.error('ESTADO DA AUTH:', { hasApiKey: !!BREVO_API_KEY });
     throw new Error('Não foi possível enviar o e-mail de recuperação.');
   }
 };

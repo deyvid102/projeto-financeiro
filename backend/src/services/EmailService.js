@@ -11,6 +11,8 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER, // Seu e-mail Gmail
     pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/[\s"']/g, '') : '', // Remove espaços e aspas
   },
+  debug: true, // Exibe o tráfego SMTP detalhado no console
+  logger: true, // Registra o log da atividade do Nodemailer
   tls: {
     requireTLS: true,
     rejectUnauthorized: false // Evita falhas de handshake em redes de proxy do Render
@@ -52,8 +54,8 @@ export const sendVerificationEmail = async (email, code) => {
   try {
     await transporter.sendMail(mailOptions);
   } catch (error) {
-    console.error('ERRO NODEMAILER (VERIFICAÇÃO):', error.message);
-    console.error('DEBUG AUTH:', { user: process.env.EMAIL_USER, hasPass: !!process.env.EMAIL_PASS });
+    console.error('❌ FALHA CRÍTICA NO ENVIO DE VERIFICAÇÃO:', error);
+    console.error('ESTADO DA AUTH:', { user: process.env.EMAIL_USER, hasPass: !!process.env.EMAIL_PASS });
     throw new Error('Não foi possível enviar o e-mail de verificação.');
   }
 };
@@ -80,9 +82,8 @@ export const sendResetPasswordEmail = async (email, code) => {
   try {
     await transporter.sendMail(mailOptions);
   } catch (error) {
-    console.error('ERRO NODEMAILER (RECUPERAÇÃO DE SENHA):', error.message);
-    console.error('SMTP RESPONSE:', error.response);
-    console.error('DEBUG AUTH:', { user: process.env.EMAIL_USER, hasPass: !!process.env.EMAIL_PASS });
+    console.error('❌ FALHA CRÍTICA NA RECUPERAÇÃO DE SENHA:', error);
+    console.error('RESPOSTA TÉCNICA SMTP:', error.response);
     throw new Error('Não foi possível enviar o e-mail de recuperação.');
   }
 };

@@ -3,8 +3,8 @@ import nodemailer from 'nodemailer';
 
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // false para usar STARTTLS na porta 587
+  port: 465,
+  secure: true, // true para SSL direto na porta 465
   family: 4, // Força o uso de IPv4 para evitar erro ENETUNREACH (IPv6) no Render
   pool: true, // Mantém a conexão aberta para múltiplos envios
   auth: {
@@ -14,13 +14,12 @@ const transporter = nodemailer.createTransport({
   debug: true, // Exibe o tráfego SMTP detalhado no console
   logger: true, // Registra o log da atividade do Nodemailer
   tls: {
-    requireTLS: true,
     rejectUnauthorized: false // Evita falhas de handshake em redes de proxy do Render
   },
   // Aumentando os tempos de espera para evitar timeouts em ambiente cloud
-  connectionTimeout: 20000, 
-  greetingTimeout: 20000,   // Tempo máximo para esperar a saudação do servidor SMTP
-  socketTimeout: 30000      // Tempo máximo de inatividade do socket
+  connectionTimeout: 30000, 
+  greetingTimeout: 30000,   // Tempo máximo para esperar a saudação do servidor SMTP
+  socketTimeout: 60000      // Tempo máximo de inatividade do socket
 });
 
 // Verifica a conexão SMTP no início para logar erros no Render

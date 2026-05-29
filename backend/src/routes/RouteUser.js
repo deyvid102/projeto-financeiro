@@ -5,6 +5,7 @@ import {
   authUser, 
   googleAuthUser,
   forgotPassword,
+  validateResetCode,
   resetPassword,
   updateUserProfile 
 } from '../controllers/ControlUser.js';
@@ -26,6 +27,9 @@ router.post('/google-login', googleAuthUser);
 
 // Rota: POST /api/users/forgot-password
 router.post('/forgot-password', forgotPassword);
+
+// Rota: POST /api/users/validate-reset-code
+router.post('/validate-reset-code', validateResetCode);
 
 // Rota: POST /api/users/reset-password
 router.post('/reset-password', resetPassword);

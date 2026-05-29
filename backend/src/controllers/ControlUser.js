@@ -34,6 +34,7 @@ const generateVerificationCode = () => {
 };
 
 const sendVerificationCode = async (user) => {
+  if (user.email) user.email = user.email.toLowerCase().trim();
   const newCode = generateVerificationCode();
   user.verificationCode = newCode;
   user.verificationCodeExpires = Date.now() + 10 * 60 * 1000;
@@ -47,7 +48,8 @@ const sendVerificationCode = async (user) => {
 // @route   POST /api/users/register
 export const registerUser = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, password } = req.body;
+    const email = req.body.email?.trim().toLowerCase();
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: 'Preencha todos os campos.' });
@@ -60,6 +62,7 @@ export const registerUser = async (req, res) => {
         const newCode = generateVerificationCode();
         userExists.verificationCode = newCode;
         userExists.verificationCodeExpires = Date.now() + 10 * 60 * 1000;
+        userExists.email = email; // Garante email normalizado
         userExists.lastVerificationSentAt = Date.now();
         await userExists.save();
         await sendVerificationEmail(email, newCode);
@@ -96,15 +99,24 @@ export const registerUser = async (req, res) => {
 // @route   POST /api/users/verify-email
 export const verifyEmail = async (req, res) => {
   try {
-    const { email, code } = req.body;
-    const user = await ModelUser.findOne({ 
-      email, 
-      verificationCode: code,
-      verificationCodeExpires: { $gt: Date.now() }
-    });
+    const email = req.body.email?.toLowerCase().trim();
+    const code = req.body.code?.toString().toLowerCase().trim();
+
+    const user = await ModelUser.findOne({ email });
 
     if (!user) {
-      return res.status(400).json({ message: 'Código inválido ou expirado.' });
+      return res.status(404).json({ message: 'Usuário não encontrado.' });
+    }
+
+    // Logs de Depuração
+    console.log(`[VERIFY] Email: ${email} | Recebido: ${code} | No Banco: ${user.verificationCode}`);
+    
+    if (user.verificationCode !== code) {
+      return res.status(400).json({ message: 'Código de verificação incorreto.' });
+    }
+
+    if (new Date(user.verificationCodeExpires) < new Date()) {
+      return res.status(400).json({ message: 'Este código expirou. Solicite um novo.' });
     }
 
     user.isVerified = true;
@@ -128,7 +140,8 @@ export const verifyEmail = async (req, res) => {
 // @route   POST /api/users/login
 export const authUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { password } = req.body;
+    const email = req.body.email?.trim().toLowerCase();
 
     const user = await ModelUser.findOne({ email });
 
@@ -195,7 +208,8 @@ export const googleAuthUser = async (req, res) => {
     });
     const payload = ticket.getPayload();
 
-    const { email, name } = payload; // Google também fornece 'picture' para avatar
+    const name = payload.name;
+    const email = payload.email?.toLowerCase().trim(); // Google também fornece 'picture' para avatar
 
     let user = await ModelUser.findOne({ email });
 
@@ -245,7 +259,7 @@ export const googleAuthUser = async (req, res) => {
 // @route   POST /api/users/forgot-password
 export const forgotPassword = async (req, res) => {
   try {
-    const { email } = req.body;
+    const email = req.body.email?.trim().toLowerCase();
     const user = await ModelUser.findOne({ email });
 
     if (!user) {
@@ -254,7 +268,7 @@ export const forgotPassword = async (req, res) => {
 
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
     user.resetPasswordCode = resetCode;
-    user.resetPasswordExpires = Date.now() + 10 * 60 * 1000;
+    user.resetPasswordExpires = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
     await sendResetPasswordEmail(email, resetCode);
@@ -269,15 +283,23 @@ export const forgotPassword = async (req, res) => {
 // @route   POST /api/users/validate-reset-code
 export const validateResetCode = async (req, res) => {
   try {
-    const { email, code } = req.body;
-    const user = await ModelUser.findOne({
-      email,
-      resetPasswordCode: code,
-      resetPasswordExpires: { $gt: Date.now() }
-    });
+    const email = req.body.email?.toLowerCase().trim();
+    const code = req.body.code?.toString().toLowerCase().trim();
+
+    const user = await ModelUser.findOne({ email });
 
     if (!user) {
-      return res.status(400).json({ message: 'Código inválido ou expirado.' });
+      return res.status(404).json({ message: 'Usuário não encontrado.' });
+    }
+
+    console.log(`[RESET-VALIDATE] Email: ${email} | Recebido: ${code} | No Banco: ${user.resetPasswordCode}`);
+
+    if (user.resetPasswordCode !== code) {
+      return res.status(400).json({ message: 'Código de recuperação incorreto.' });
+    }
+
+    if (new Date(user.resetPasswordExpires) < new Date()) {
+      return res.status(400).json({ message: 'O código de recuperação expirou.' });
     }
 
     res.status(200).json({ message: 'Código válido.' });
@@ -290,20 +312,22 @@ export const validateResetCode = async (req, res) => {
 // @route   POST /api/users/reset-password
 export const resetPassword = async (req, res) => {
   try {
-    const { email, code, newPassword } = req.body;
+    const { newPassword } = req.body;
+    const email = req.body.email?.toLowerCase().trim();
+    const code = req.body.code?.toString().toLowerCase().trim();
 
     if (!newPassword || newPassword.length < 6) {
       return res.status(400).json({ message: 'A senha deve ter pelo menos 6 caracteres.' });
     }
 
-    const user = await ModelUser.findOne({
-      email,
-      resetPasswordCode: code,
-      resetPasswordExpires: { $gt: Date.now() }
-    });
+    const user = await ModelUser.findOne({ email });
 
-    if (!user) {
+    if (!user || user.resetPasswordCode !== code) {
       return res.status(400).json({ message: 'Código inválido ou expirado.' });
+    }
+
+    if (new Date(user.resetPasswordExpires) < new Date()) {
+      return res.status(400).json({ message: 'O código de recuperação expirou.' });
     }
 
     user.password = newPassword;

@@ -5,6 +5,7 @@ import {
   BarChart3, Wallet, Target, Brain, ArrowLeft,
 } from 'lucide-react';
 import api from '/src/services/api.js';
+import { fetchAndStoreUserPlan } from '../../../utils/planUtils';
 import { setStoredPlan } from '../../../utils/planUtils';
 import '../Home.css';
 
@@ -92,6 +93,59 @@ function UserRegister() {
     }
     return () => clearInterval(interval);
   }, [resendTimer]);
+
+  // Google Login Integration (Similar ao UserLogin)
+  const handleGoogleLoginSuccess = async (response) => {
+    setError('');
+    setLoading(true);
+    try {
+      const res = await api.post('/users/google-login', { idToken: response.credential });
+      localStorage.setItem('token', res.data.token);
+      localStorage.setItem('user_name', res.data.name);
+      await fetchAndStoreUserPlan(api);
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Erro ao criar conta com Google.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (step !== 1) return;
+    const scriptId = 'google-gsi-client';
+    let script = document.getElementById(scriptId);
+
+    const renderGoogleButton = () => {
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+      const buttonDiv = document.getElementById('google-sign-in-button-register');
+      if (!clientId) return;
+
+      if (window.google?.accounts?.id && buttonDiv) {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: handleGoogleLoginSuccess,
+          auto_select: false,
+          locale: 'pt_BR'
+        });
+        window.google.accounts.id.renderButton(buttonDiv, {
+          theme: 'outline', size: 'large', text: 'signup_with', width: '100%', shape: 'pill'
+        });
+      }
+    };
+
+    if (!script) {
+      script = document.createElement('script');
+      script.id = scriptId;
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true; script.defer = true;
+      script.onload = renderGoogleButton;
+      document.body.appendChild(script);
+    } else {
+      const timeout = setTimeout(renderGoogleButton, 100);
+      return () => clearTimeout(timeout);
+    }
+  }, [step]);
 
   // Step 1: Validar dados
   const handleStepOne = (e) => {
@@ -194,7 +248,7 @@ function UserRegister() {
       <div className="home-page-container min-h-screen bg-background flex flex-col">
         {/* Nav */}
         <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/70 border-b border-border">
-          <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
             <Link to="/">
               <Logo />
             </Link>
@@ -351,6 +405,17 @@ function UserRegister() {
                   </button>
                 </form>
 
+                <div className="relative py-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-border" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground font-bold tracking-wider">ou</span>
+                  </div>
+                </div>
+
+                <div id="google-sign-in-button-register" className="w-full"></div>
+
                 <p className="text-center text-sm text-muted-foreground mt-6">
                   Já tem conta?{' '}
                   <Link to="/login" className="font-bold text-primary hover:underline">
@@ -370,7 +435,7 @@ function UserRegister() {
       <div className="home-page-container min-h-screen bg-background flex flex-col">
         {/* Nav */}
         <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/70 border-b border-border">
-          <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
             <Link to="/">
               <Logo />
             </Link>
@@ -454,7 +519,7 @@ function UserRegister() {
     <div className="home-page-container min-h-screen bg-background flex flex-col">
       {/* Nav */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/70 border-b border-border">
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link to="/">
             <Logo />
           </Link>
@@ -539,7 +604,7 @@ function UserRegister() {
   return (
     <div className="home-page-container min-h-screen bg-background flex flex-col">
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/70 border-b border-border">
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link to="/">
             <Logo />
           </Link>

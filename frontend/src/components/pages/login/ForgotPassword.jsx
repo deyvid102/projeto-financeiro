@@ -114,7 +114,7 @@ function ForgotPassword() {
   return (
     <div className="home-page-container min-h-screen bg-background flex flex-col">
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/70 border-b border-border">
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link to="/">
             <Logo />
           </Link>

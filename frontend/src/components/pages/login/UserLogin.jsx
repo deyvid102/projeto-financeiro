@@ -51,7 +51,7 @@ function UserLogin() {
     try {
       const res = await api.post('/users/google-login', { idToken: response.credential });
       localStorage.setItem('token', res.data.token);
-      const userName = res.data.user?.name || res.data.name;
+      const userName = res.data.name;
       if (userName) localStorage.setItem('user_name', userName);
       await fetchAndStoreUserPlan(api);
       navigate('/dashboard');
@@ -113,7 +113,7 @@ function UserLogin() {
     try {
       const response = await api.post('/users/login', { email, password });
       localStorage.setItem('token', response.data.token);
-      const userName = response.data.user?.name || response.data.name;
+      const userName = response.data.name;
       if (userName) localStorage.setItem('user_name', userName);
       await fetchAndStoreUserPlan(api);
       navigate('/dashboard');
@@ -165,7 +165,7 @@ function UserLogin() {
     return (
       <div className="home-page-container min-h-screen bg-background flex flex-col">
         <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/70 border-b border-border">
-          <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
             <Link to="/">
               <Logo />
             </Link>
@@ -223,7 +223,7 @@ function UserLogin() {
     <div className="home-page-container min-h-screen bg-background flex flex-col">
       {/* Nav */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/70 border-b border-border">
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link to="/">
             <Logo />
           </Link>

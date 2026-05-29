@@ -1,19 +1,15 @@
+import 'dotenv/config';
 import nodemailer from 'nodemailer';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false, // false para porta 587 (STARTTLS)
+  service: 'gmail',
   auth: {
-    user: process.env.EMAIL_USER, // Seu e-mail de login no Brevo
-    pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.trim() : '', // Sua SMTP Key
+    user: process.env.EMAIL_USER, // Seu e-mail Gmail
+    pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/[\s"']/g, '') : '', // Remove espaços e aspas
   },
   tls: {
-    // Ajuda a evitar erros de conexão em ambientes de hospedagem
-    rejectUnauthorized: false
+    // Garante que o servidor não rejeite a conexão por certificados SNI em alguns ambientes
+    servername: 'smtp.gmail.com'
   },
   // Adiciona tempo de espera para evitar timeouts em conexões lentas do servidor
   connectionTimeout: 10000, 
@@ -41,8 +37,8 @@ export const sendVerificationEmail = async (email, code) => {
   try {
     await transporter.sendMail(mailOptions);
   } catch (error) {
-    // Log detalhado para você ver no painel do Render
-    console.error('ERRO NODEMAILER (VERIFICAÇÃO):', error.message, error.code);
+    console.error('ERRO NODEMAILER (VERIFICAÇÃO):', error.message);
+    console.error('DEBUG AUTH:', { user: process.env.EMAIL_USER, hasPass: !!process.env.EMAIL_PASS });
     throw new Error('Não foi possível enviar o e-mail de verificação.');
   }
 };
@@ -69,8 +65,9 @@ export const sendResetPasswordEmail = async (email, code) => {
   try {
     await transporter.sendMail(mailOptions);
   } catch (error) {
-    // Log detalhado para você ver no painel do Render
-    console.error('ERRO NODEMAILER (RECUPERAÇÃO):', error.message, error.code);
+    console.error('ERRO NODEMAILER (RECUPERAÇÃO DE SENHA):', error.message);
+    console.error('SMTP RESPONSE:', error.response);
+    console.error('DEBUG AUTH:', { user: process.env.EMAIL_USER, hasPass: !!process.env.EMAIL_PASS });
     throw new Error('Não foi possível enviar o e-mail de recuperação.');
   }
 };

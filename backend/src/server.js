@@ -1,5 +1,5 @@
+import 'dotenv/config';
 import express from "express";
-import dotenv from "dotenv";
 import mongoose from "mongoose";
 import cors from "cors";
 import cron from "node-cron";
@@ -24,8 +24,6 @@ import routePlans from './routes/RoutePlans.js';
 
 //AI
 import routeAI from "./AI/RouteAI.js";
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;

@@ -1,5 +1,4 @@
 import Groq from "groq-sdk";
-import dotenv from "dotenv";
 import Transaction from "../models/ModelTransaction.js";
 import Goal from "../models/ModelGoal.js";
 import ShoppingCart from "../models/ModelShoppingCart.js";
@@ -7,8 +6,6 @@ import ModelRecurrence from "../models/ModelRecurrence.js";
 import Investment from "../models/ModelInvestment.js";
 import ModelUser from "../models/ModelUser.js";
 import { isPlanAtLeast } from "../services/planService.js";
-
-dotenv.config();
 
 // Load GROQ API keys from env and prepare rotation
 const apiKeys = [

@@ -3,8 +3,8 @@ import nodemailer from 'nodemailer';
 
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
-  port: 465,
-  secure: true, // true para SSL na porta 465
+  port: 587,
+  secure: false, // false para usar STARTTLS na porta 587
   family: 4, // Força o uso de IPv4 para evitar erro ENETUNREACH (IPv6) no Render
   pool: true, // Mantém a conexão aberta para múltiplos envios
   auth: {
@@ -12,6 +12,7 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/[\s"']/g, '') : '', // Remove espaços e aspas
   },
   tls: {
+    requireTLS: true,
     rejectUnauthorized: false // Evita falhas de handshake em redes de proxy do Render
   },
   // Aumentando os tempos de espera para evitar timeouts em ambiente cloud

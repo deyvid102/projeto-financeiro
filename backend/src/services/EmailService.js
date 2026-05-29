@@ -2,14 +2,18 @@ import 'dotenv/config';
 import nodemailer from 'nodemailer';
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
+  pool: true, // Mantém a conexão aberta para múltiplos envios
   auth: {
     user: process.env.EMAIL_USER, // Seu e-mail Gmail
     pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/[\s"']/g, '') : '', // Remove espaços e aspas
   },
   tls: {
     // Garante que o servidor não rejeite a conexão por certificados SNI em alguns ambientes
-    servername: 'smtp.gmail.com'
+    servername: 'smtp.gmail.com',
+    rejectUnauthorized: false // Evita falhas de handshake em redes de proxy do Render
   },
   // Adiciona tempo de espera para evitar timeouts em conexões lentas do servidor
   connectionTimeout: 10000, 

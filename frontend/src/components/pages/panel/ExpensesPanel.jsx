@@ -135,50 +135,59 @@ const FilterSidebar = ({ isOpen, onClose, filters, setFilters }) => {
 const MonthSummaryModal = ({ isOpen, onClose, transactions }) => {
   const [viewDate, setViewDate] = useState(new Date());
 
+  // Normalize viewDate to start of day UTC for consistent calculations
+  const normalizedViewDate = useMemo(() => {
+    const d = new Date(viewDate);
+    return new Date(Date.UTC(d.getFullYear(), d.getMonth(), 1)); // Always start of month UTC
+  }, [viewDate]);
+
   const summaryData = useMemo(() => {
     if (!isOpen) return { days: [], totalIn: 0, totalOut: 0, net: 0, period: '' };
-    const year = viewDate.getFullYear();
-    const month = viewDate.getMonth();
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
+    
+    const year = normalizedViewDate.getUTCFullYear();
+    const month = normalizedViewDate.getUTCMonth(); // 0-11
 
-    const lastDay = new Date(year, month + 1, 0).getDate();
+    const now = new Date();
+    const nowUtcStartOfDay = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
     const daysArray = [];
     let monthlyIn = 0, monthlyOut = 0;
 
     for (let i = 1; i <= lastDay; i++) {
-      const cur = new Date(year, month, i);
+      const cur = new Date(Date.UTC(year, month, i)); // Create UTC date for current day
       const dayTransactions = (transactions || []).filter(t => {
-        if (!t.date) return false;
-        const [tYear, tMonth, tDay] = t.date.split('T')[0].split('-').map(Number);
-        return tYear === year && tMonth === (month + 1) && tDay === i;
+        if (!t.date) return false; // Ensure t.date exists
+        const tDate = new Date(t.date); // Transaction date is UTC
+        // Compare UTC year, month, and day
+        return tDate.getUTCFullYear() === year && tDate.getUTCMonth() === month && tDate.getUTCDate() === i;
       });
 
       const inVal = dayTransactions.filter(t => t.type === 'entrada').reduce((acc, t) => acc + Number(t.amount || 0), 0);
       const outVal = dayTransactions.filter(t => t.type === 'saida').reduce((acc, t) => acc + Number(t.amount || 0), 0);
       monthlyIn += inVal; 
       monthlyOut += outVal;
-
+      
       daysArray.push({ 
         day: i, 
         label: `${i < 10 ? '0'+i : i}/${(month+1)<10 ? '0'+(month+1) : (month+1)}`, 
-        isFuture: cur > now, 
-        isToday: cur.getTime() === now.getTime(), 
+        isFuture: cur > nowUtcStartOfDay, 
+        isToday: cur.getTime() === nowUtcStartOfDay.getTime(), 
         in: inVal, 
         out: outVal, 
         balance: inVal - outVal, 
         hasActivity: dayTransactions.length > 0 
       });
     }
-
+    
     return { 
       days: daysArray, 
       totalIn: monthlyIn, 
       totalOut: monthlyOut, 
       net: monthlyIn - monthlyOut, 
-      period: viewDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) 
+      period: normalizedViewDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }) 
     };
-  }, [transactions, viewDate, isOpen]);
+  }, [transactions, normalizedViewDate, isOpen]);
 
   if (!isOpen) return null;
 
@@ -252,30 +261,36 @@ const ExpensesPanel = () => {
   const filteredData = useMemo(() => {
     return (allTransactions || []).filter(t => {
       if (!t.date) return false;
-      const tDate = new Date(t.date);
-      tDate.setHours(0, 0, 0, 0);
+      const tDate = new Date(t.date); // This is UTC
+      // Normalize tDate to start of day UTC for consistent comparison
+      const tDateUtcStartOfDay = new Date(Date.UTC(tDate.getUTCFullYear(), tDate.getUTCMonth(), tDate.getUTCDate()));
 
       const matchType = filters.viewType === 'todos' ? true : t.type === filters.viewType;
       let matchTime = true;
       const now = new Date();
-      now.setHours(23, 59, 59, 999);
+      // Normalize 'now' to start/end of day UTC for consistent comparison
+      const nowUtcStartOfDay = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+      const nowUtcEndOfDay = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999));
 
       if (filters.timeRange === '7d') {
-        const limit = new Date(); limit.setDate(now.getDate() - 7);
-        matchTime = tDate >= limit;
+        const limit = new Date(nowUtcStartOfDay);
+        limit.setUTCDate(nowUtcStartOfDay.getUTCDate() - 7);
+        matchTime = tDateUtcStartOfDay >= limit;
       } else if (filters.timeRange === '30d') {
-        const limit = new Date(); limit.setMonth(now.getMonth() - 1);
-        matchTime = tDate >= limit;
+        const limit = new Date(nowUtcStartOfDay);
+        limit.setUTCMonth(nowUtcStartOfDay.getUTCMonth() - 1);
+        matchTime = tDateUtcStartOfDay >= limit;
       } else if (filters.timeRange === '12m') {
-        const limit = new Date(); limit.setFullYear(now.getFullYear() - 1);
-        matchTime = tDate >= limit;
+        const limit = new Date(nowUtcStartOfDay);
+        limit.setUTCFullYear(nowUtcStartOfDay.getUTCFullYear() - 1);
+        matchTime = tDateUtcStartOfDay >= limit;
       } else if (filters.timeRange === 'custom') {
         if (filters.startDate && filters.endDate) {
           const [sY, sM, sD] = filters.startDate.split('-').map(Number);
           const [eY, eM, eD] = filters.endDate.split('-').map(Number);
-          const start = new Date(sY, sM - 1, sD, 0, 0, 0);
-          const end = new Date(eY, eM - 1, eD, 23, 59, 59);
-          matchTime = tDate >= start && tDate <= end;
+          const start = new Date(Date.UTC(sY, sM - 1, sD, 0, 0, 0));
+          const end = new Date(Date.UTC(eY, eM - 1, eD, 23, 59, 59, 999));
+          matchTime = tDateUtcStartOfDay >= start && tDateUtcStartOfDay <= end;
         } else {
           matchTime = false;
         }
@@ -304,47 +319,58 @@ const ExpensesPanel = () => {
     if (filters.timeRange === 'custom' && filters.startDate && filters.endDate) {
       const [sY, sM, sD] = filters.startDate.split('-').map(Number);
       const [eY, eM, eD] = filters.endDate.split('-').map(Number);
-      startDate = new Date(sY, sM - 1, sD);
-      endDate = new Date(eY, eM - 1, eD);
+      // Create UTC dates for custom range
+      startDate = new Date(Date.UTC(sY, sM - 1, sD, 0, 0, 0));
+      endDate = new Date(Date.UTC(eY, eM - 1, eD, 23, 59, 59, 999));
     } else {
-      const sortedDates = [...filteredData].sort((a, b) => new Date(a.date) - new Date(b.date));
-      startDate = new Date(sortedDates[0].date);
-      endDate = new Date(sortedDates[sortedDates.length - 1].date);
+      // Sort by UTC date
+      const sortedDates = [...filteredData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      // Extract UTC components for start and end dates
+      const firstDate = new Date(sortedDates[0].date);
+      const lastDate = new Date(sortedDates[sortedDates.length - 1].date);
+      startDate = new Date(Date.UTC(firstDate.getUTCFullYear(), firstDate.getUTCMonth(), firstDate.getUTCDate(), 0, 0, 0));
+      endDate = new Date(Date.UTC(lastDate.getUTCFullYear(), lastDate.getUTCMonth(), lastDate.getUTCDate(), 23, 59, 59, 999));
     }
 
     const diffDays = Math.ceil(Math.abs(endDate - startDate) / (1000 * 60 * 60 * 24));
     const data = [];
 
     if (diffDays <= 15) {
-      for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-        const dayStr = d.toISOString().split('T')[0];
-        const dayT = filteredData.filter(t => t.date.split('T')[0] === dayStr);
+      // Iterate day by day using UTC
+      for (let d = new Date(startDate); d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
+        const dayStr = d.toISOString().split('T')[0]; // This is UTC date string
+        const dayT = filteredData.filter(t => {
+          // Compare transaction date (UTC) with current day string (UTC)
+          return new Date(t.date).toISOString().split('T')[0] === dayStr;
+        });
         data.push({
-          name: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+          name: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' }),
           entrada: dayT.filter(t => t.type === 'entrada').reduce((a, b) => a + Number(b.amount || 0), 0),
           saida: -dayT.filter(t => t.type === 'saida').reduce((a, b) => a + Number(b.amount || 0), 0)
         });
       }
     } else if (diffDays <= 366) {
-      let current = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-      const last = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+      // Iterate month by month using UTC
+      let current = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1));
+      const last = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), 1));
       while (current <= last) {
-        const m = current.getMonth();
-        const y = current.getFullYear();
+        const m = current.getUTCMonth();
+        const y = current.getUTCFullYear();
         const monthT = filteredData.filter(t => {
-          const d = new Date(t.date);
-          return d.getMonth() === m && d.getFullYear() === y;
+          const d = new Date(t.date); // Transaction date is UTC
+          return d.getUTCMonth() === m && d.getUTCFullYear() === y;
         });
         data.push({
-          name: current.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).toUpperCase(),
+          name: current.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).toUpperCase(),
           entrada: monthT.filter(t => t.type === 'entrada').reduce((a, b) => a + Number(b.amount || 0), 0),
           saida: -monthT.filter(t => t.type === 'saida').reduce((a, b) => a + Number(b.amount || 0), 0)
         });
-        current.setMonth(current.getMonth() + 1);
+        current.setUTCMonth(current.getUTCMonth() + 1);
       }
     } else {
-      for (let y = startDate.getFullYear(); y <= endDate.getFullYear(); y++) {
-        const yearT = filteredData.filter(t => new Date(t.date).getFullYear() === y);
+      // Iterate year by year using UTC
+      for (let y = startDate.getUTCFullYear(); y <= endDate.getUTCFullYear(); y++) {
+        const yearT = filteredData.filter(t => new Date(t.date).getUTCFullYear() === y);
         data.push({
           name: y.toString(),
           entrada: yearT.filter(t => t.type === 'entrada').reduce((a, b) => a + Number(b.amount || 0), 0),
@@ -440,7 +466,7 @@ const ExpensesPanel = () => {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} stackOffset="sign">
                 <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.05} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 7, fontWeight: 900, fill: '#94a3b8'}} dy={10}/>
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 7, fontWeight: 900, fill: '#94a3b8'}} dy={10} interval="preserveStartEnd"/>
                 <YAxis hide />
                 <Tooltip cursor={{fill: 'rgba(255, 255, 255, 0.03)'}} content={({ active, payload }) => {
                   if (active && payload && payload.length) {

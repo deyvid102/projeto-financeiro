@@ -181,31 +181,61 @@ const multiSeriesData = useMemo(() => {
     const dataPoint = { name: point.display };
     
     ativos.forEach(inv => {
-      const dataAporte = new Date(inv.createdAt || inv.date).getTime();
+      const dataAporte = new Date(inv.startDate).getTime(); // Use inv.startDate para o início do investimento
       const key = inv.ticker || inv.name;
 
       // Se o aporte foi feito depois desta data, o valor é zero
-      if (point.timestamp < dataAporte && !point.isLastPoint) {
+      if (point.timestamp < dataAporte) {
         dataPoint[key] = 0;
         return;
       }
 
-      const valorInicial = Number(inv.amountInvested || 0);
-      const valorAtual = Number(inv.currentTotalValue || 0);
-      
-      // Cálculo de progresso temporal
-      const tempoTotal = now.getTime() - dataAporte;
-      const tempoDecorrido = point.timestamp - dataAporte;
-      const progresso = Math.max(0, Math.min(1, tempoDecorrido / tempoTotal));
+      let valueAtPoint = 0;
 
-      // Se for o último ponto, garante o valor real atualizado
-      if (point.isLastPoint) {
-        dataPoint[key] = valorAtual;
-      } else {
-        // Interpolação linear simples para o gráfico
-        const valorNaData = valorInicial + ((valorAtual - valorInicial) * progresso);
-        dataPoint[key] = Number(valorNaData.toFixed(2));
+      if (inv.type === 'renda fixa') {
+        const principal = Number(inv.amountInvested || 0);
+        const taxaAnual = Number(inv.expectedProfitability || 0) / 100;
+        const d1 = new Date(inv.startDate);
+        const d2 = new Date(point.timestamp); // Ponto atual no gráfico
+
+        const dias = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (dias < 0) { // Não deve acontecer se point.timestamp < dataAporte for tratado
+            valueAtPoint = 0;
+        } else {
+            const anos = dias / 365;
+            valueAtPoint = principal * Math.pow((1 + taxaAnual), anos);
+        }
+        // Garante que o valor não exceda o valor final se a endDate for atingida
+        if (inv.endDate && new Date(point.timestamp) >= new Date(inv.endDate)) {
+            const finalD1 = new Date(inv.startDate);
+            const finalD2 = new Date(inv.endDate);
+            const finalDias = Math.floor((finalD2.getTime() - finalD1.getTime()) / (1000 * 60 * 60 * 24));
+            const finalAnos = finalDias / 365;
+            valueAtPoint = principal * Math.pow((1 + taxaAnual), finalAnos);
+        }
+
+      } else { // Para outros tipos (ações, FIIs, criptomoedas, outros)
+        const valorInicial = Number(inv.amountInvested || 0);
+        const valorAtual = Number(inv.currentTotalValue || 0); // Este deve ser atualizado por dados de mercado externos
+        
+        const tempoTotal = now.getTime() - dataAporte; // Tempo total do início até agora
+        const tempoDecorrido = point.timestamp - dataAporte; // Tempo do início até o ponto atual do gráfico
+
+        let progresso = 0;
+        if (tempoTotal > 0) {
+            progresso = Math.max(0, Math.min(1, tempoDecorrido / tempoTotal));
+        }
+        
+        // Se for o último ponto, usa o valor atual real
+        if (point.isLastPoint) {
+            valueAtPoint = valorAtual;
+        } else {
+            // Interpolação linear simples para outros tipos
+            valueAtPoint = valorInicial + ((valorAtual - valorInicial) * progresso);
+        }
       }
+      dataPoint[key] = Number(valueAtPoint.toFixed(2));
     });
 
     return dataPoint;

@@ -1,4 +1,5 @@
 import Subscription from '../models/ModelSubscription.js';
+import ModelUser from '../models/ModelUser.js';
 
 // Preço fixo das ofertas (em reais). Armazenamos como number (ex: 29.90)
 const PLAN_PRICES = {
@@ -113,6 +114,47 @@ export const deleteSubscription = async (req, res) => {
   }
 };
 
+export const subscribe = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { planKey } = req.body;
+
+    if (!planKey || !['STARTER', 'PRO', 'MAX'].includes(planKey)) {
+      return res.status(400).json({ message: 'Plano inválido.' });
+    }
+
+    const price = PLAN_PRICES[planKey];
+    
+    // Busca se o usuário já possui uma assinatura para atualizar ou cria uma nova
+    let subscription = await Subscription.findOne({ user: userId });
+
+    if (subscription) {
+      subscription.plan = planKey;
+      subscription.price = price;
+      // Se mudar para o plano Starter (grátis), já marcamos como pago
+      subscription.status = price === 0 ? 'paid' : 'pending';
+      await subscription.save();
+    } else {
+      subscription = await Subscription.create({
+        user: userId,
+        plan: planKey,
+        price,
+        status: price === 0 ? 'paid' : 'pending',
+        dueDate: new Date(),
+        paymentHistory: price === 0 ? [{ amount: 0.0, method: 'free', note: 'Assinatura inicial' }] : [],
+      });
+    }
+
+    // Atualiza o plano diretamente no modelo do Usuário para refletir no JWT/Middleware
+    await ModelUser.findByIdAndUpdate(userId, { plan: planKey });
+
+    return res.status(200).json(subscription);
+  } catch (err) {
+    console.error('Erro ao processar assinatura:', err);
+    return res.status(500).json({ message: 'Erro ao processar alteração de plano.' });
+  }
+};
+
 export default {
   createSubscription,
   listUserSubscriptions,
@@ -120,4 +162,5 @@ export default {
   paySubscription,
   updateSubscription,
   deleteSubscription,
+  subscribe,
 };

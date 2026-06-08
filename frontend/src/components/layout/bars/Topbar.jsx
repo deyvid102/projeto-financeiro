@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, ChevronDown, Settings, CreditCard, ShoppingBag } from 'lucide-react';
+import { LogOut, ChevronDown, Settings, CreditCard, ShoppingBag, Crown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '@/services/api'; 
 import NotificationCenter from '@/components/NotificationCenter';
 import ModalSettings from '@/components/modals/ModalSettings'; 
 import ModalCard from '@/components/modals/ModalCard';
 import ModalCart from '@/components/modals/ModalCart';
+import ModalPlans from '@/components/modals/ModalPlans';
 
 const Topbar = () => {
   const navigate = useNavigate();
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isPlansOpen, setIsPlansOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false); 
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -126,6 +128,14 @@ const Topbar = () => {
                 
                 <div className="p-2 space-y-1">
                   <button
+                    onClick={() => { setIsPlansOpen(true); setIsMenuOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:bg-bg-main/60 hover:text-brand transition-all group"
+                  >
+                    <Crown size={16} className="group-hover:scale-110 transition-transform duration-300" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Planos</span>
+                  </button>
+
+                  <button
                     onClick={() => { setIsCardModalOpen(true); setIsMenuOpen(false); }}
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:bg-bg-main/60 hover:text-brand transition-all group"
                   >
@@ -159,6 +169,7 @@ const Topbar = () => {
       <ModalSettings isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       <ModalCard isOpen={isCardModalOpen} onClose={() => setIsCardModalOpen(false)} />
       <ModalCart isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
+      <ModalPlans isOpen={isPlansOpen} onClose={() => setIsPlansOpen(false)} />
     </header>
   );
 };

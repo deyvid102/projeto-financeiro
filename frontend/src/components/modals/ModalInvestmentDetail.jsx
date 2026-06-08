@@ -14,27 +14,69 @@ const ModalInvestmentDetail = ({ isOpen, investment, onClose, onRefresh }) => {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   // --- MOVIDO PARA CIMA DO "IF" ---
+  // Gráfico de performance histórica estimada
   const chartData = useMemo(() => {
-    // Se não houver investimento, retorna um array vazio para o hook não quebrar
     if (!investment) return [];
     
-    const start = new Date(investment.startDate || Date.now());
-    const end = new Date();
     const points = [];
-    const steps = 8; 
+    const numPoints = 30; // Número de pontos para gerar no gráfico
 
-    const initialValue = Number(investment.amountInvested) || 0;
-    const currentValue = Number(investment.currentTotalValue) || 0;
-    
-    for (let i = 0; i <= steps; i++) {
-      const date = new Date(start.getTime() + (end.getTime() - start.getTime()) * (i / steps));
-      const progress = i / steps;
-      const trend = initialValue + (currentValue - initialValue) * progress;
-      const volatility = i === 0 || i === steps ? 0 : (Math.random() - 0.5) * (initialValue * 0.04);
-      
+    const startDate = new Date(investment.startDate);
+    const today = new Date();
+
+    // Garante que startDate não esteja no futuro em relação a hoje
+    if (startDate > today) {
+      startDate.setDate(today.getDate()); 
+    }
+
+    const timeDiff = today.getTime() - startDate.getTime(); // Diferença total em milissegundos
+
+    for (let i = 0; i < numPoints; i++) {
+      const dateAtPoint = new Date(startDate.getTime() + (timeDiff / (numPoints - 1)) * i);
+      let valueAtPoint = 0;
+
+      if (investment.type === 'renda fixa') {
+        const principal = Number(investment.amountInvested || 0);
+        const taxaAnual = Number(investment.expectedProfitability || 0) / 100;
+        const d1 = new Date(investment.startDate); // Data original de início do investimento
+        const d2 = dateAtPoint; // Data do ponto atual no gráfico
+
+        const daysElapsed = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (daysElapsed < 0) {
+          valueAtPoint = 0; // Antes do investimento começar
+        } else {
+          const yearsElapsed = daysElapsed / 365;
+          valueAtPoint = principal * Math.pow((1 + taxaAnual), yearsElapsed);
+        }
+
+        // Limita o valor ao valor final na endDate se ela existir e o ponto for posterior
+        if (investment.endDate) {
+          const endDate = new Date(investment.endDate);
+          if (dateAtPoint >= endDate) {
+            const finalD1 = new Date(investment.startDate);
+            const finalDays = Math.floor((endDate.getTime() - finalD1.getTime()) / (1000 * 60 * 60 * 24));
+            const finalYears = finalDays / 365;
+            valueAtPoint = principal * Math.pow((1 + taxaAnual), finalYears);
+          }
+        }
+
+      } else { // Para outros tipos (renda variável)
+        const initialValue = Number(investment.amountInvested || 0);
+        const currentValue = Number(investment.currentTotalValue || 0);
+        
+        const totalInvestmentDuration = today.getTime() - startDate.getTime();
+        const elapsedAtPoint = dateAtPoint.getTime() - startDate.getTime();
+        
+        let progress = 0;
+        if (totalInvestmentDuration > 0) {
+          progress = Math.max(0, Math.min(1, elapsedAtPoint / totalInvestmentDuration));
+        }
+        valueAtPoint = initialValue + ((currentValue - initialValue) * progress);
+      }
       points.push({
-        date: date.toLocaleDateString('pt-BR', { month: 'short', day: 'numeric' }),
-        valor: parseFloat((trend + volatility).toFixed(2))
+        date: dateAtPoint.toLocaleDateString('pt-BR', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+        valor: parseFloat(valueAtPoint.toFixed(2))
       });
     }
     return points;

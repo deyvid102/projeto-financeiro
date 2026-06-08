@@ -74,24 +74,49 @@ const DashPanel = () => {
 
   const timeChartsData = useMemo(() => {
     const now = new Date();
+    // Normalize 'now' to start of day in UTC to avoid timezone issues when calculating past dates
+    const nowUtc = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+
     const dataMap = {};
-    const periods = timeFilter === 'semanal' ? 7 : timeFilter === 'mensal' ? 30 : 12;
+    let periods;
+
+    if (timeFilter === 'semanal') {
+      periods = 7;
+    } else if (timeFilter === 'mensal') {
+      periods = 30;
+    } else { // 'anual'
+      periods = 12;
+    }
     
     for (let i = periods - 1; i >= 0; i--) {
-      const d = new Date();
-      if (timeFilter === 'anual') d.setMonth(now.getMonth() - i); 
-      else d.setDate(now.getDate() - i);
-      const label = timeFilter === 'anual' 
-        ? d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') 
-        : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-      dataMap[label] = { name: label, entradas: 0, saidas: 0, bipolarSaida: 0, rawDate: new Date(d) };
+      const d = new Date(nowUtc); // Start from nowUtc
+      let label;
+      let rawDate;
+
+      if (timeFilter === 'anual') {
+        d.setUTCMonth(nowUtc.getUTCMonth() - i);
+        d.setUTCDate(1); // Ensure day is 1st to avoid issues with months having fewer days
+        label = d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric', timeZone: 'UTC' }).replace('.', '');
+        rawDate = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+      } else { // 'semanal' or 'mensal'
+        d.setUTCDate(nowUtc.getUTCDate() - i);
+        label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
+        rawDate = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+      }
+      dataMap[label] = { name: label, entradas: 0, saidas: 0, bipolarSaida: 0, rawDate: rawDate };
     }
 
     transactions.forEach(t => {
       const d = new Date(t.date);
-      let label = (timeFilter === 'anual') 
-        ? d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')
-        : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      const tDateUtc = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+
+      let label;
+      if (timeFilter === 'anual') {
+        label = tDateUtc.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric', timeZone: 'UTC' }).replace('.', '');
+      } else {
+        label = tDateUtc.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
+      }
+      
       if (dataMap[label]) {
         if (t.type === 'entrada') dataMap[label].entradas += Number(t.amount);
         else {
@@ -282,7 +307,7 @@ const DashPanel = () => {
                   <linearGradient id="cSaida" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/><stop offset="95%" stopColor="#ef4444" stopOpacity={0.05}/></linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.2} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 8, fill: '#94a3b8', fontWeight: 'bold'}} interval={timeFilter === 'mensal' ? 5 : 0} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 8, fill: '#94a3b8', fontWeight: 'bold'}} interval="preserveStartEnd" />
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 8, fill: '#94a3b8'}} />
                 <Tooltip content={<CustomTooltip />} />
                 <Area isAnimationActive={false} type="monotone" name="Entradas" dataKey="entradas" stroke="#3b82f6" strokeWidth={3} fill="url(#cEntrada)" />
@@ -301,7 +326,7 @@ const DashPanel = () => {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={timeChartsData} stackOffset="sign" margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.2} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 8, fill: '#94a3b8', fontWeight: 'bold'}} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 8, fill: '#94a3b8', fontWeight: 'bold'}} interval="preserveStartEnd" />
                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 8, fill: '#94a3b8'}} />
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.02)' }} />
                 <ReferenceLine y={0} stroke="#cbd5e1" strokeWidth={1} />

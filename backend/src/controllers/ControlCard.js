@@ -40,10 +40,21 @@ export const createCard = async (req, res) => {
       vaRechargeDay, vaRechargeAmount,
     } = req.body;
 
+    // Verifica se já existe um cartão com o mesmo nome e tipo para o usuário (evita erro E11000)
+    const existingCard = await ModelCard.findOne({
+      user: req.user._id,
+      name: name?.trim(),
+      type,
+    });
+
+    if (existingCard) {
+      return res.status(400).json({ message: `Você já possui um cartão do tipo "${type === 'vale_alimentacao' ? 'Vale Alimentação' : type}" com o nome "${name}".` });
+    }
+
     // Monta o documento de acordo com o tipo
     const cardData = {
       user: req.user._id,
-      name,
+      name: name?.trim(),
       type,
       lastFourDigits,
       flag,
@@ -53,14 +64,19 @@ export const createCard = async (req, res) => {
     if (type === 'credito') {
       Object.assign(cardData, { creditLimit, closingDay, dueDay });
     } else if (type === 'vale_alimentacao') {
-      Object.assign(cardData, { vaRechargeDay, vaRechargeAmount });
+      const isRechargeDay = new Date().getDate() === Number(vaRechargeDay);
+      Object.assign(cardData, { 
+        vaRechargeDay, 
+        vaRechargeAmount,
+        vaBalance: isRechargeDay ? vaRechargeAmount : 0 
+      });
     }
 
     const card = await ModelCard.create(cardData);
 
     // ── Para VA: criar automaticamente a recorrência de recarga mensal ──
     if (type === 'vale_alimentacao') {
-      await ModelRecurrence.create({
+      const recurrence = await ModelRecurrence.create({
         user: req.user._id,
         title: `Recarga ${name}`,
         amount: vaRechargeAmount,
@@ -74,10 +90,29 @@ export const createCard = async (req, res) => {
         isActive: true,
         status: 'active',
       });
+
+      // Se hoje for o dia da recarga, gera a transação inicial para o histórico
+      if (new Date().getDate() === Number(vaRechargeDay)) {
+        await ModelTransaction.create({
+          user: req.user._id,
+          title: `Recarga VA — ${name}`,
+          amount: vaRechargeAmount,
+          type: 'entrada',
+          category: 'vale_alimentacao',
+          date: new Date(),
+          card: card._id,
+          transactionOrigin: 'va_recharge',
+          isRecurring: true,
+          recurrenceId: recurrence._id,
+        });
+      }
     }
 
     res.status(201).json(card);
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ message: 'Já existe um cartão com este nome e tipo cadastrado.' });
+    }
     const status = err.message.includes('requer') ? 400 : 500;
     res.status(status).json({ message: err.message });
   }
@@ -91,6 +126,20 @@ export const updateCard = async (req, res) => {
   try {
     const card = await ModelCard.findOne({ _id: req.params.id, user: req.user._id });
     if (!card) return res.status(404).json({ message: 'Cartão não encontrado.' });
+
+    // Validação de duplicidade ao atualizar nome
+    const newName = req.body.name?.trim();
+    if (newName && newName !== card.name) {
+      const nameExists = await ModelCard.findOne({
+        user: req.user._id,
+        name: newName,
+        type: card.type,
+        _id: { $ne: req.params.id }
+      });
+      if (nameExists) {
+        return res.status(400).json({ message: 'Já existe outro cartão com este nome para este tipo.' });
+      }
+    }
 
     const allowedFields = ['name', 'lastFourDigits', 'flag', 'color', 'creditLimit', 'closingDay', 'dueDay', 'vaRechargeDay', 'vaRechargeAmount'];
     allowedFields.forEach((field) => {
@@ -108,6 +157,9 @@ export const updateCard = async (req, res) => {
     const updated = await card.save();
     res.json(updated);
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ message: 'Já existe um cartão com este nome e tipo cadastrado.' });
+    }
     res.status(500).json({ message: err.message });
   }
 };
@@ -128,16 +180,25 @@ export const deleteCard = async (req, res) => {
       });
     }
 
-    card.isActive = false;
-    await card.save();
+    // Se for um cartão VA, apaga a recorrência de recarga
+    if (card.type === 'vale_alimentacao') {
+      await ModelRecurrence.deleteOne({ cardId: req.params.id, user: req.user._id, isVaRecharge: true });
+      // O cartão VA ainda é desativado (soft delete)
+      card.isActive = false;
+      await card.save();
+      res.json({ message: 'Cartão VA e sua recorrência de recarga removidos com sucesso.' });
+    } else {
+      // Para outros tipos de cartão (débito, crédito sem limite em uso), desativa o cartão
+      card.isActive = false;
+      await card.save();
 
-    // Desativa todas as recorrências vinculadas ao cartão
-    await ModelRecurrence.updateMany(
-      { cardId: req.params.id, user: req.user._id },
-      { isActive: false, status: 'paused' }
-    );
-
-    res.json({ message: 'Cartão desativado com sucesso.' });
+      // Desativa todas as recorrências vinculadas ao cartão (que não sejam VA recharge)
+      await ModelRecurrence.updateMany(
+        { cardId: req.params.id, user: req.user._id, isVaRecharge: { $ne: true } },
+        { isActive: false, status: 'paused' }
+      );
+      res.json({ message: 'Cartão desativado com sucesso.' });
+    }
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
